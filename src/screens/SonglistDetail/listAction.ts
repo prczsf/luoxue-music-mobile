@@ -5,7 +5,7 @@ import { LIST_IDS } from '@/config/constant'
 import listState from '@/store/list/state'
 import syncSourceList from '@/core/syncSourceList'
 import { confirmDialog, toMD5, toast } from '@/utils/tools'
-import { type Source } from '@/store/songlist/state'
+import songlistState, { type Source } from '@/store/songlist/state'
 
 const getListId = (id: string, source: LX.OnlineSource) => `${source}__${id}`
 
@@ -33,8 +33,9 @@ export const handlePlay = async(id: string, source: Source, list?: LX.Music.Musi
 
 export const handleCollect = async(id: string, source: Source, name: string) => {
   const listId = getListId(id, source)
+  const targetId = `${source}_${toMD5(listId)}`
 
-  const targetList = listState.userList.find(l => l.sourceListId == listId)
+  const targetList = listState.userList.find(l => (l.source == source && l.sourceListId == id) || l.id == targetId)
   if (targetList) {
     const confirm = await confirmDialog({
       message: global.i18n.t('duplicate_list_tip', { name: targetList.name }),
@@ -46,13 +47,29 @@ export const handleCollect = async(id: string, source: Source, name: string) => 
     return
   }
 
-  const list = await getListDetailAll(source, id)
+  // 若当前页面已有歌曲列表缓存，先作为初始歌曲落库，避免歌单墙显示 0 首或详情为空
+  const initialList = (songlistState.listDetailInfo.id == id && songlistState.listDetailInfo.source == source && songlistState.listDetailInfo.list.length)
+    ? songlistState.listDetailInfo.list
+    : []
+
+  const newListInfo: LX.List.UserListInfo = {
+    id: targetId,
+    name,
+    source,
+    sourceListId: id,
+    locationUpdateTime: Date.now(),
+  }
+
   await createList({
     name,
-    id: `${source}_${toMD5(listId)}`,
-    list,
+    id: targetId,
+    list: initialList,
     source,
     sourceListId: id,
   })
   toast(global.i18n.t('collect_success'))
+
+  // 静默执行一次歌单更新，把新加的歌单完整替换成在线列表的歌曲
+  void syncSourceList(newListInfo)
 }
+

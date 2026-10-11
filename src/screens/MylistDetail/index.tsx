@@ -43,6 +43,7 @@ export default ({ componentId, listId }: { componentId: string, listId: string }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+
   const handleBack = () => {
     void Navigation.pop(componentId)
   }

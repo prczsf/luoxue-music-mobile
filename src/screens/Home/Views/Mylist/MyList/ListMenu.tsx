@@ -1,25 +1,26 @@
 import { useRef, useImperativeHandle, forwardRef, useState } from 'react'
+import { TouchableOpacity, View, ScrollView } from 'react-native'
 import { useI18n } from '@/lang'
-import Menu, { type Menus, type MenuType, type Position } from '@/components/common/Menu'
+import Modal, { type ModalType } from '@/components/common/Modal'
+import { Icon } from '@/components/common/Icon'
+import Text from '@/components/common/Text'
 import { LIST_IDS } from '@/config/constant'
 import musicSdk from '@/utils/musicSdk'
-import { scaleSizeW } from '@/utils/pixelRatio'
+import { scaleSizeH, scaleSizeW } from '@/utils/pixelRatio'
+import { useTheme } from '@/store/theme/hook'
+import { createStyle } from '@/utils/tools'
 import listState from '@/store/list/state'
 
 export interface SelectInfo {
   listInfo: LX.List.MyListInfo
-  // selectedList: LX.Music.MusicInfo[]
   index: number
-  // listId: string
-  // single: boolean
 }
+
 const initSelectInfo = {}
 
-const menuItemWidth = scaleSizeW(110)
-
+export type Position = { x: number, y: number, w: number, h: number }
 
 export interface ListMenuProps {
-  onNew: (position: number) => void
   onRename: (listInfo: LX.List.UserListInfo) => void
   onSort: (listInfo: LX.List.MyListInfo) => void
   onDuplicateMusic: (listInfo: LX.List.MyListInfo) => void
@@ -28,18 +29,24 @@ export interface ListMenuProps {
   onSync: (listInfo: LX.List.UserListInfo) => void
   onSelectLocalFile: (listInfo: LX.List.MyListInfo, index: number) => void
   onRemove: (listInfo: LX.List.UserListInfo) => void
-  onMovePosition: (listInfo: LX.List.UserListInfo, direction: 'up' | 'down') => void
-}
-export interface ListMenuType {
-  show: (selectInfo: SelectInfo, position: Position) => void
+  onNew?: (position: number) => void
+  onMovePosition?: (listInfo: LX.List.UserListInfo, direction: 'up' | 'down') => void
 }
 
-export type {
-  Position,
+export interface ListMenuType {
+  show: (selectInfo: SelectInfo, position?: Position) => void
+}
+
+interface ActionItem {
+  key: string
+  label: string
+  icon: string
+  danger?: boolean
+  disabled?: boolean
+  handler: () => void
 }
 
 export default forwardRef<ListMenuType, ListMenuProps>(({
-  onNew,
   onRename,
   onSort,
   onDuplicateMusic,
@@ -48,117 +55,268 @@ export default forwardRef<ListMenuType, ListMenuProps>(({
   onSync,
   onSelectLocalFile,
   onRemove,
-  onMovePosition,
 }, ref) => {
   const t = useI18n()
-  const menuRef = useRef<MenuType>(null)
+  const theme = useTheme()
+  const modalRef = useRef<ModalType>(null)
   const selectInfoRef = useRef<SelectInfo>(initSelectInfo as SelectInfo)
-  const [menus, setMenus] = useState<Menus>([])
+  const [listInfo, setListInfo] = useState<LX.List.MyListInfo | null>(null)
   const [visible, setVisible] = useState(false)
 
   useImperativeHandle(ref, () => ({
-    show(selectInfo, position) {
+    show(selectInfo) {
       selectInfoRef.current = selectInfo
-      handleSetMenu(selectInfo.listInfo)
-      if (visible) menuRef.current?.show(position)
-      else {
-        setVisible(true)
-        requestAnimationFrame(() => {
-          menuRef.current?.show(position)
-        })
-      }
+      setListInfo(selectInfo.listInfo)
+      setVisible(true)
+      requestAnimationFrame(() => {
+        modalRef.current?.setVisible(true)
+      })
     },
   }))
 
-  const handleSetMenu = (listInfo: LX.List.MyListInfo) => {
-    let rename = false
-    let sync = false
-    let remove = false
-    let move = false
-    let local_file = !listState.fetchingListStatus[listInfo.id]
-    let userList: LX.List.UserListInfo
-    switch (listInfo.id) {
-      case LIST_IDS.DEFAULT:
-      case LIST_IDS.LOVE:
-        break
-      default:
-        userList = listInfo as LX.List.UserListInfo
-        rename = true
-        remove = true
-        move = true
-        sync = !!(userList.source && musicSdk[userList.source]?.songList)
-        break
-    }
-
-    setMenus([
-      { action: 'new', label: t('list_create') },
-      { action: 'moveUp', disabled: !move, label: t('list_move_up') },
-      { action: 'moveDown', disabled: !move, label: t('list_move_down') },
-      { action: 'rename', disabled: !rename, label: t('list_rename') },
-      { action: 'sort', label: t('list_sort') },
-      { action: 'duplicateMusic', label: t('lists__duplicate') },
-      { action: 'local_file', disabled: !local_file, label: t('list_select_local_file') },
-      { action: 'sync', disabled: !sync || !local_file, label: t('list_sync') },
-      { action: 'import', label: t('list_import') },
-      { action: 'export', label: t('list_export') },
-      // { action: 'changePosition', label: t('change_position') },
-      { action: 'remove', disabled: !remove, label: t('list_remove') },
-    ])
+  const handleClose = () => {
+    modalRef.current?.setVisible(false)
   }
 
-  const handleMenuPress = ({ action }: typeof menus[number]) => {
-    const selectInfo = selectInfoRef.current
-    switch (action) {
-      case 'new':
-        onNew(Math.max(selectInfo.index - 1, 0))
-        break
-      case 'moveUp':
-        onMovePosition(selectInfo.listInfo as LX.List.UserListInfo, 'up')
-        break
-      case 'moveDown':
-        onMovePosition(selectInfo.listInfo as LX.List.UserListInfo, 'down')
-        break
-      case 'rename':
-        onRename(selectInfo.listInfo as LX.List.UserListInfo)
-        break
-      case 'sort':
-        onSort(selectInfo.listInfo)
-        break
-      case 'duplicateMusic':
-        onDuplicateMusic(selectInfo.listInfo)
-        break
-      case 'import':
-        onImport(selectInfo.listInfo, selectInfo.index)
-        break
-      case 'export':
-        onExport(selectInfo.listInfo, selectInfo.index)
-        break
-      case 'sync':
-        onSync(selectInfo.listInfo as LX.List.UserListInfo)
-        break
-        // case 'changePosition':
+  const getListName = (item: LX.List.MyListInfo | null): string => {
+    if (!item) return ''
+    if (item.id == LIST_IDS.DEFAULT) return t('list_name_default')
+    if (item.id == LIST_IDS.LOVE) return t('list_name_love')
+    return item.name
+  }
 
-        //   break
-      case 'local_file':
-        onSelectLocalFile(selectInfo.listInfo, selectInfo.index)
-        break
-      case 'remove':
-        onRemove(selectInfo.listInfo as LX.List.UserListInfo)
-        break
+  const isFixed = listInfo?.id == LIST_IDS.DEFAULT || listInfo?.id == LIST_IDS.LOVE
 
-      default:
-        break
+  const getActions = (): ActionItem[] => {
+    if (!listInfo) return []
+    const info = selectInfoRef.current
+
+    if (isFixed) {
+      // 内置列表：仅显示对它们有意义的操作，彻底删除置灰的重命名/删除/上下移
+      return [
+        {
+          key: 'sort',
+          label: t('list_sort'),
+          icon: 'slider',
+          handler: () => { handleClose(); onSort(listInfo) },
+        },
+        {
+          key: 'duplicateMusic',
+          label: t('lists__duplicate'),
+          icon: 'help',
+          handler: () => { handleClose(); onDuplicateMusic(listInfo) },
+        },
+        {
+          key: 'local_file',
+          label: t('list_select_local_file'),
+          icon: 'sd-card',
+          disabled: !!listState.fetchingListStatus[listInfo.id],
+          handler: () => { handleClose(); onSelectLocalFile(listInfo, info.index) },
+        },
+        {
+          key: 'import',
+          label: t('list_import'),
+          icon: 'add_folder',
+          handler: () => { handleClose(); onImport(listInfo, info.index) },
+        },
+        {
+          key: 'export',
+          label: t('list_export'),
+          icon: 'share',
+          handler: () => { handleClose(); onExport(listInfo, info.index) },
+        },
+      ]
     }
+
+    // 用户自建列表
+    const userList = listInfo as LX.List.UserListInfo
+    const canSync = !!(userList.source && musicSdk[userList.source]?.songList)
+    const isFetching = !!listState.fetchingListStatus[listInfo.id]
+
+    const actions: ActionItem[] = [
+      {
+        key: 'rename',
+        label: t('list_rename'),
+        icon: 'album',
+        handler: () => { handleClose(); onRename(userList) },
+      },
+      {
+        key: 'sort',
+        label: t('list_sort'),
+        icon: 'slider',
+        handler: () => { handleClose(); onSort(listInfo) },
+      },
+      {
+        key: 'duplicateMusic',
+        label: t('lists__duplicate'),
+        icon: 'help',
+        handler: () => { handleClose(); onDuplicateMusic(listInfo) },
+      },
+    ]
+
+    if (canSync) {
+      actions.push({
+        key: 'sync',
+        label: t('list_sync'),
+        icon: 'available_updates',
+        disabled: isFetching,
+        handler: () => { handleClose(); onSync(userList) },
+      })
+    }
+
+    actions.push(
+      {
+        key: 'local_file',
+        label: t('list_select_local_file'),
+        icon: 'sd-card',
+        disabled: isFetching,
+        handler: () => { handleClose(); onSelectLocalFile(listInfo, info.index) },
+      },
+      {
+        key: 'import',
+        label: t('list_import'),
+        icon: 'add_folder',
+        handler: () => { handleClose(); onImport(listInfo, info.index) },
+      },
+      {
+        key: 'export',
+        label: t('list_export'),
+        icon: 'share',
+        handler: () => { handleClose(); onExport(listInfo, info.index) },
+      },
+      {
+        key: 'remove',
+        label: t('list_remove'),
+        icon: 'remove',
+        danger: true,
+        handler: () => {
+          handleClose()
+          if (!listInfo || isFixed) return
+          onRemove(listInfo as LX.List.UserListInfo)
+        },
+      },
+    )
+
+    return actions
   }
 
   return (
-    visible
-      ? <Menu
-          ref={menuRef}
-          menus={menus}
-          onPress={handleMenuPress}
-          width={menuItemWidth}
-        />
-      : null
+    <>
+      {visible ? (
+        <Modal
+          ref={modalRef}
+          bgHide={true}
+          bgColor="rgba(0,0,0,0.45)"
+          onHide={() => { setVisible(false) }}
+        >
+          <View style={styles.sheetContainer}>
+            <View style={[styles.sheetContent, { backgroundColor: theme['c-content-background'] }]}>
+              {/* 抽屉顶部：歌单概要 */}
+              <View style={[styles.sheetHeader, { borderBottomColor: theme['c-border-background'] }]}>
+                <View style={styles.headerIconWrap}>
+                  <Icon
+                    name={listInfo?.id == LIST_IDS.LOVE ? 'love' : 'album'}
+                    size={20}
+                    color={listInfo?.id == LIST_IDS.LOVE ? theme['c-primary-font'] : theme['c-font']}
+                  />
+                </View>
+                <View style={styles.headerTextWrap}>
+                  <Text size={15} numberOfLines={1} style={{ fontWeight: 'bold' }} color={theme['c-font']}>
+                    {getListName(listInfo)}
+                  </Text>
+                </View>
+                <TouchableOpacity style={styles.closeBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} onPress={handleClose}>
+                  <Icon name="close" size={16} color={theme['c-350']} />
+                </TouchableOpacity>
+              </View>
+
+              {/* 动作选项列表 */}
+              <ScrollView style={styles.actionList} bounces={false}>
+                {getActions().map((action) => (
+                  <TouchableOpacity
+                    key={action.key}
+                    style={[
+                      styles.actionItem,
+                      {
+                        borderBottomColor: theme['c-border-background'],
+                        opacity: action.disabled ? 0.45 : 1,
+                      },
+                    ]}
+                    activeOpacity={0.65}
+                    disabled={action.disabled}
+                    onPress={action.handler}
+                  >
+                    <View style={styles.actionIconWrap}>
+                      <Icon
+                        name={action.icon}
+                        size={17}
+                        color={action.danger ? '#ff5252' : theme['c-button-font']}
+                      />
+                    </View>
+                    <Text
+                      size={14}
+                      color={action.danger ? '#ff5252' : theme['c-font']}
+                      style={styles.actionLabel}
+                    >
+                      {action.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
+          </View>
+        </Modal>
+      ) : null}
+    </>
   )
+})
+
+const styles = createStyle({
+  sheetContainer: {
+    flex: 1,
+    justifyContent: 'flex-end',
+  },
+  sheetContent: {
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+    maxHeight: '75%',
+    paddingBottom: scaleSizeH(20),
+    elevation: 8,
+  },
+  sheetHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: scaleSizeW(16),
+    paddingVertical: scaleSizeH(14),
+    borderBottomWidth: 1,
+  },
+  headerIconWrap: {
+    marginRight: scaleSizeW(10),
+  },
+  headerTextWrap: {
+    flex: 1,
+  },
+  closeBtn: {
+    width: 28,
+    height: 28,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  actionList: {
+    paddingHorizontal: scaleSizeW(16),
+  },
+  actionItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: scaleSizeH(13),
+    borderBottomWidth: 0.5,
+  },
+  actionIconWrap: {
+    width: scaleSizeW(28),
+    alignItems: 'center',
+    marginRight: scaleSizeW(12),
+  },
+  actionLabel: {
+    flex: 1,
+  },
 })

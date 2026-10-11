@@ -72,6 +72,7 @@ const defaultSetting: LX.AppSetting = {
   'download.fileName': '歌名 - 歌手',
   'download.savePath': '',
   'download.quality': '128k',
+  'download.askQuality': false,
 
   'sync.enable': false,
 

@@ -24,6 +24,8 @@ type FlatListType = FlatListProps<LX.Music.MusicInfo>
 type ListStatus = 'loading' | 'ready' | 'error'
 
 export interface ListProps {
+  listId?: string
+  checkHomePagerIdle?: boolean
   onShowMenu: (musicInfo: LX.Music.MusicInfo, index: number, position: Position) => void
   onMuiltSelectMode: () => void
   onSelectAll: (isAll: boolean) => void
@@ -40,13 +42,14 @@ export interface ListType {
 
 const SLOW_LOAD_DELAY = 1000
 
-const usePlayIndex = () => {
+const usePlayIndex = (targetListId?: string) => {
   const activeListId = useActiveListId()
+  const currentListId = targetListId ?? activeListId
   const playMusicInfo = usePlayMusicInfo()
   const playInfo = usePlayInfo()
   const playIndex = useMemo(() => {
-    return playMusicInfo.listId == activeListId ? playInfo.playIndex : -1
-  }, [activeListId, playInfo.playIndex, playMusicInfo.listId])
+    return playMusicInfo.listId == currentListId ? playInfo.playIndex : -1
+  }, [currentListId, playInfo.playIndex, playMusicInfo.listId])
   return playIndex
 }
 
@@ -137,10 +140,18 @@ const TopProgressBar = () => {
 }
 
 const List = forwardRef<ListType, ListProps>((props, ref) => {
-  const { onShowMenu, onMuiltSelectMode, onSelectAll, onSelectCountChange } = props
+  const { onShowMenu, onMuiltSelectMode, onSelectAll, onSelectCountChange, listId: propListId, checkHomePagerIdle = true } = props
+  const targetListId = propListId ?? listState.activeListId
   const flatListRef = useRef<FlatList>(null)
   const [currentList, setList] = useState<LX.List.ListMusics>([])
-  const [listStatus, setListStatus] = useState<ListStatus>('loading')
+  const [listStatus, setListStatusState] = useState<ListStatus>('loading')
+  const listStatusRef = useRef<ListStatus>('loading')
+  const setListStatus = (status: ListStatus) => {
+    listStatusRef.current = status
+    setListStatusState(status)
+  }
+  const targetListIdRef = useRef(targetListId)
+  targetListIdRef.current = targetListId
   const [slowLoad, setSlowLoad] = useState(false)
   const slowTimerRef = useRef<ReturnType<typeof setTimeout>>()
   const listFirstScrollRef = useRef(false)
@@ -189,7 +200,7 @@ const List = forwardRef<ListType, ListProps>((props, ref) => {
       return selectedListRef.current
     },
     scrollToInfo(info) {
-      void getListMusics(listState.activeListId).then((list) => {
+      void getListMusics(targetListId).then((list) => {
         const index = list.findIndex(m => m.id == info.id)
         if (index < 0) return
         flatListRef.current?.scrollToIndex({ index: Math.floor(index / (rowInfo.current.rowNum ?? 1)), viewPosition: 0.3, animated: true })
@@ -250,8 +261,16 @@ const List = forwardRef<ListType, ListProps>((props, ref) => {
     slowTimerRef.current = setTimeout(() => { setSlowLoad(true) }, SLOW_LOAD_DELAY)
     const handleFail = (err: unknown) => {
       clearSlowTimer()
-      console.warn('getListPrevSelectId failed', err)
+      console.warn('load list failed', err)
       setListStatus('error')
+    }
+    if (propListId) {
+      if (global.lx.jumpMyListPosition) {
+        global.lx.jumpMyListPosition = false
+        waitJumpListPositionRef.current = true
+      }
+      updateList(propListId)
+      return
     }
     if (global.lx.jumpMyListPosition) {
       global.lx.jumpMyListPosition = false
@@ -263,7 +282,7 @@ const List = forwardRef<ListType, ListProps>((props, ref) => {
   }
 
   const handleRetry = () => {
-    const id = currentListIdRef.current
+    const id = propListId ?? currentListIdRef.current
     if (id) {
       currentListIdRef.current = ''
       updateList(id)
@@ -277,10 +296,10 @@ const List = forwardRef<ListType, ListProps>((props, ref) => {
   useEffect(() => {
     initLoad()
     const handleChange = (ids: string[]) => {
-      if (!ids.includes(listState.activeListId)) return
-      const id = listState.activeListId
-      void getListMusics(id).then((list) => {
-        if (currentListIdRef.current != id) return
+      const currentTargetId = propListId ?? listState.activeListId
+      if (!ids.includes(currentTargetId)) return
+      void getListMusics(currentTargetId).then((list) => {
+        if (currentListIdRef.current != currentTargetId) return
         selectedListRef.current = []
         setSelectedList([])
         setList([...list])
@@ -290,12 +309,18 @@ const List = forwardRef<ListType, ListProps>((props, ref) => {
       })
     }
 
+    const handleToggle = (id: string) => {
+      if (propListId) return
+      updateList(id)
+    }
+
     const handleJumpPosition = () => {
       requestAnimationFrame(() => {
         const listId = playerState.playMusicInfo.listId
         if (!listId) return
-        if (listId != listState.activeListId) {
-          setActiveList(listId)
+        const currentTargetId = propListId ?? listState.activeListId
+        if (listId != currentTargetId) {
+          if (!propListId) setActiveList(listId)
           if (currentListIdRef.current != listId) waitJumpListPositionRef.current = true
         } else if (playerState.playInfo.playIndex > -1) {
           if (isUpdateingList.current) waitJumpListPositionRef.current = true
@@ -308,21 +333,21 @@ const List = forwardRef<ListType, ListProps>((props, ref) => {
       })
     }
 
-    global.state_event.on('mylistToggled', updateList)
+    global.state_event.on('mylistToggled', handleToggle)
     global.app_event.on('myListMusicUpdate', handleChange)
     global.app_event.on('jumpListPosition', handleJumpPosition)
 
     return () => {
-      global.state_event.off('mylistToggled', updateList)
+      global.state_event.off('mylistToggled', handleToggle)
       global.app_event.off('myListMusicUpdate', handleChange)
       global.app_event.off('jumpListPosition', handleJumpPosition)
       clearSlowTimer()
     }
-  }, [])
+  }, [propListId])
 
-  const activeIndex = usePlayIndex()
+  const activeIndex = usePlayIndex(propListId)
   const handlePlay = (index: number) => {
-    void playList(listState.activeListId, index)
+    void playList(targetListIdRef.current, index)
   }
 
   const handleUpdateSelectedList = (newList: LX.List.ListMusics) => {
@@ -366,8 +391,8 @@ const List = forwardRef<ListType, ListProps>((props, ref) => {
 
   const handlePress = (item: LX.Music.MusicInfo, index: number) => {
     requestAnimationFrame(() => {
-      if (!global.lx.homePagerIdle) return
-      if (listStatus != 'ready') return
+      if (checkHomePagerIdle && !global.lx.homePagerIdle) return
+      if (listStatusRef.current != 'ready') return
       if (isMultiSelectModeRef.current) {
         handleSelect(item, index)
       } else {
@@ -388,7 +413,7 @@ const List = forwardRef<ListType, ListProps>((props, ref) => {
       listFirstScrollRef.current = false
       return
     }
-    void saveListPosition(listState.activeListId, nativeEvent.contentOffset.y)
+    void saveListPosition(targetListId, nativeEvent.contentOffset.y)
   }
 
   const renderItem: FlatListType['renderItem'] = ({ item, index }) => (

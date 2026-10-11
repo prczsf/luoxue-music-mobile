@@ -12,10 +12,7 @@ import { type Metadata } from '@/components/MetadataEditModal'
 import musicSdk from '@/utils/musicSdk'
 import { getListMusicSync } from '@/utils/listManage'
 import { clearMusicUrlByMusic } from '@/utils/data'
-import { getMusicUrl } from '@/core/music'
-import { getPlayQuality } from '@/core/music/utils'
-import { copyFile, downloadFile, temporaryDirectoryPath, unlink } from '@/utils/fs'
-import { log } from '@/utils/log'
+
 
 export const handlePlay = (listId: SelectInfo['listId'], index: SelectInfo['index']) => {
   void playList(listId, index)
@@ -184,30 +181,5 @@ export const handleToggleSource = async(listId: string, musicInfo: LX.Music.Musi
   return true
 }
 
-export const downloadMusicFile = async(musicInfo: SelectInfo['musicInfo'], dirPath: string, qualityOverride?: LX.Quality) => {
-  if (musicInfo.source == 'local') return
-  const requested = qualityOverride ?? settingState.setting['download.quality'] ?? '128k'
-  const effective = getPlayQuality(requested, musicInfo)
-  if (effective != requested) toast(global.i18n.t('list_download_quality_fallback', { want: requested, got: effective }), 'long')
-  toast(global.i18n.t('list_download_start'))
-  const tempPath = `${temporaryDirectoryPath}/lx_dl_tmp_${Date.now()}`
-  try {
-    const url = await getMusicUrl({ musicInfo, quality: effective, isRefresh: false })
-    if (!url) throw new Error('url is empty')
-    const urlPath = url.split(/[?#]/)[0]
-    let ext = urlPath.substring(urlPath.lastIndexOf('.') + 1)
-    if (!ext || ext.length > 5 || /[^a-zA-Z0-9]/.test(ext)) ext = 'mp3'
-    const baseName = filterFileName(`${musicInfo.singer} - ${musicInfo.name}`) || musicInfo.id
-    const fileName = effective == '128k' ? baseName : `${baseName} [${effective}]`
-    const result = await downloadFile(url, tempPath).promise
-    if (result.statusCode != 200) throw new Error(`statusCode: ${result.statusCode}`)
-    await copyFile(tempPath, `${dirPath}/${fileName}.${ext}`)
-  } catch (error) {
-    log.error('download music failed', error)
-    toast(global.i18n.t('list_download_failed', { msg: (error as Error).message }))
-    return
-  } finally {
-    void unlink(tempPath).catch(() => {})
-  }
-  toast(global.i18n.t('list_download_success'))
-}
+export { downloadMusicFile } from '@/core/downloadMusic'
+

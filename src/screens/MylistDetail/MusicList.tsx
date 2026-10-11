@@ -1,4 +1,4 @@
-import { useCallback, useRef } from 'react'
+import { useCallback, useMemo, useRef } from 'react'
 import { TouchableOpacity, View } from 'react-native'
 
 import ListMenu, { type ListMenuType, type Position, type SelectInfo } from '../Home/Views/Mylist/MusicList/ListMenu'
@@ -17,16 +17,17 @@ import MetadataEditModal, { type MetadataEditType, type MetadataEditProps } from
 import MusicToggleModal, { type MusicToggleModalType } from '../Home/Views/Mylist/MusicList/MusicToggleModal'
 import DownloadQualityModal, { type DownloadQualityModalType } from '../Home/Views/Mylist/MusicList/DownloadQualityModal'
 import { getDownloadDir } from '@/core/downloadPath'
+import settingState from '@/store/setting/state'
 import { getListMusicSync } from '@/utils/listManage'
 import { getListMusics } from '@/core/list'
 import { playList } from '@/core/player/player'
-import { useListFetching } from '@/store/list/hook'
+import { useListFetching, useListMusics } from '@/store/list/hook'
 import { useTheme } from '@/store/theme/hook'
 import { Icon } from '@/components/common/Icon'
 import Text from '@/components/common/Text'
 import { useI18n } from '@/lang'
 import { BorderWidths } from '@/theme'
-import { scaleSizeW } from '@/utils/pixelRatio'
+import { scaleSizeH, scaleSizeW } from '@/utils/pixelRatio'
 
 /**
  * 歌单详情歌曲编排器（详情页专用）
@@ -37,6 +38,7 @@ export default ({ listId }: { listId: string }) => {
   const theme = useTheme()
   const t = useI18n()
   const fetching = useListFetching(listId)
+  const musicList = useListMusics(listId)
   const listMusicSearchRef = useRef<ListMusicSearchType>(null)
   const listRef = useRef<ListType>(null)
   const multipleModeBarRef = useRef<MultipleModeBarType>(null)
@@ -120,7 +122,10 @@ export default ({ listId }: { listId: string }) => {
   const handlePlayAll = useCallback(() => {
     if (fetching) return
     void getListMusics(listId).then(list => {
-      if (!list.length) return
+      if (!list.length) {
+        toast(global.i18n.t('list_empty_play_tip'))
+        return
+      }
       void playList(listId, 0)
     })
   }, [fetching, listId])
@@ -169,8 +174,13 @@ export default ({ listId }: { listId: string }) => {
     })()
   }, [])
   const handleDownload = useCallback((info: SelectInfo) => {
-    runDownload(info)
+    if (settingState.setting['download.askQuality']) {
+      downloadQualityModalRef.current?.show(info)
+    } else {
+      runDownload(info)
+    }
   }, [runDownload])
+
   const handleDownloadQuality = useCallback((info: SelectInfo) => {
     downloadQualityModalRef.current?.show(info)
   }, [])
@@ -188,19 +198,65 @@ export default ({ listId }: { listId: string }) => {
   }, [])
 
 
+  const totalDuration = useMemo(() => {
+    const parseInterval = (str?: string | null): number => {
+      if (!str) return 0
+      const parts = str.split(':').map(Number)
+      if (parts.length == 2) return parts[0] * 60 + parts[1]
+      if (parts.length == 3) return parts[0] * 3600 + parts[1] * 60 + parts[2]
+      return 0
+    }
+    const totalSec = musicList.reduce((acc, m) => acc + parseInterval(m.interval), 0)
+    if (!totalSec) return ''
+    const h = Math.trunc(totalSec / 3600)
+    const m = Math.trunc((totalSec % 3600) / 60)
+    if (h > 0) return t('list_duration_hours_minutes', { hours: h, minutes: m })
+    return t('list_duration_minutes', { minutes: m })
+  }, [musicList, t])
+
+  const isListEmpty = !musicList.length
+
   return (
     <View style={styles.container}>
       <View style={{ zIndex: 2 }}>
+        <View style={styles.detailHero}>
+          <Text size={12} color={theme['c-font-label']}>
+            {musicList.length
+              ? `${t('list_music_count', { total: musicList.length })}${totalDuration ? ` · ${t('list_duration_about', { duration: totalDuration })}` : ''}`
+              : t('list_music_count_empty')
+            }
+          </Text>
+        </View>
         <View style={[styles.actionRow, { borderBottomColor: theme['c-border-background'] }]}>
-          <TouchableOpacity style={styles.actionBtn} onPress={handlePlayAll}>
-            <Icon color={theme['c-button-font']} name="play-outline" size={20} />
-            <Text size={14} color={theme['c-button-font']}>{t('play_all')}</Text>
+          <TouchableOpacity
+            style={[
+              styles.playAllBtn,
+              {
+                backgroundColor: theme['c-primary-background-active'],
+                opacity: isListEmpty ? 0.45 : 1,
+              },
+            ]}
+            onPress={handlePlayAll}
+            activeOpacity={0.75}
+          >
+            <Icon color={theme['c-primary-font']} name="play-outline" size={17} />
+            <Text size={13} style={{ fontWeight: 'bold' }} color={theme['c-primary-font']}>
+              {t('play_all')}
+            </Text>
+            {musicList.length ? (
+              <Text size={11} color={theme['c-primary-font']} style={{ opacity: 0.85, marginLeft: 2 }}>
+                ({musicList.length})
+              </Text>
+            ) : null}
           </TouchableOpacity>
           <View style={styles.actionSpacer} />
-          <TouchableOpacity style={styles.actionBtn} onPress={handleShowSearch}>
+          <TouchableOpacity style={styles.actionBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} onPress={hancelMultiSelect}>
+            <Icon color={theme['c-button-font']} name="checkbox-marked" size={18} />
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.actionBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} onPress={handleShowSearch}>
             <Icon color={theme['c-button-font']} name="search-2" size={18} />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.actionBtn} onPress={hancelScrollToTop}>
+          <TouchableOpacity style={styles.actionBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} onPress={hancelScrollToTop}>
             <Icon color={theme['c-button-font']} name="chevron-right-2" size={18} />
           </TouchableOpacity>
         </View>
@@ -219,6 +275,8 @@ export default ({ listId }: { listId: string }) => {
       <View style={{ flex: 1 }} onLayout={onLayout}>
         <List
           ref={listRef}
+          listId={listId}
+          checkHomePagerIdle={false}
           onShowMenu={showMenu}
           onMuiltSelectMode={hancelMultiSelect}
           onSelectAll={isAll => multipleModeBarRef.current?.setIsSelectAll(isAll)}
@@ -271,6 +329,11 @@ const styles = createStyle({
     flex: 1,
     flexDirection: 'column',
   },
+  detailHero: {
+    paddingHorizontal: scaleSizeW(12),
+    paddingTop: scaleSizeH(8),
+    paddingBottom: scaleSizeH(2),
+  },
   actionRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -283,9 +346,17 @@ const styles = createStyle({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    paddingHorizontal: 12,
+    paddingHorizontal: scaleSizeW(10),
     height: '100%',
     justifyContent: 'center',
+  },
+  playAllBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingVertical: scaleSizeH(6),
+    paddingHorizontal: scaleSizeW(12),
+    borderRadius: 16,
   },
   actionSpacer: {
     flex: 1,

@@ -367,6 +367,11 @@ declare global {
       'download.quality': LX.Quality
 
       /**
+       * 下载前是否总是询问音质
+       */
+      'download.askQuality': boolean
+
+      /**
        * 是否启用同步
        */
       'sync.enable': boolean

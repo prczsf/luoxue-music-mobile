@@ -1,11 +1,11 @@
 import { useCallback, useRef } from 'react'
 import { View } from 'react-native'
 
-import { createStyle } from '@/utils/tools'
+import { createStyle, toast } from '@/utils/tools'
 import { navigations } from '@/navigation'
 import commonState from '@/store/common/state'
 import listState from '@/store/list/state'
-import { getListMusics, updateUserListPosition } from '@/core/list'
+import { getListMusics } from '@/core/list'
 import { playList } from '@/core/player/player'
 
 import MylistWall from './MylistWall'
@@ -34,7 +34,10 @@ export default () => {
 
   const handlePlayList = useCallback((listInfo: LX.List.MyListInfo) => {
     void getListMusics(listInfo.id).then(list => {
-      if (!list.length) return
+      if (!list.length) {
+        toast(global.i18n.t('list_empty_play_tip'))
+        return
+      }
       void playList(listInfo.id, 0)
     })
   }, [])
@@ -51,12 +54,9 @@ export default () => {
     navigations.pushListManageScreen(commonState.componentIds.home!)
   }, [])
 
-  const handleMovePosition = useCallback((listInfo: LX.List.UserListInfo, direction: 'up' | 'down') => {
-    const index = listState.userList.findIndex(l => l.id == listInfo.id)
-    if (index < 0) return
-    const position = direction == 'up' ? index - 1 : index + 1
-    if (position < 0 || position >= listState.userList.length) return
-    void updateUserListPosition(position, [listInfo.id])
+  const handleImport = useCallback(() => {
+    const target = listState.allList[0] ?? listState.defaultList
+    listImportExportRef.current?.import(target, listState.allList.length)
   }, [])
 
   return (
@@ -66,6 +66,7 @@ export default () => {
         onPlayList={handlePlayList}
         onShowMenu={handleShowMenu}
         onCreate={handleCreate}
+        onImport={handleImport}
         onManage={handleManage}
       />
       <ListNameEdit ref={listNameEditRef} />
@@ -74,7 +75,6 @@ export default () => {
       <ListImportExport ref={listImportExportRef} />
       <ListMenu
         ref={listMenuRef}
-        onNew={index => listNameEditRef.current?.showCreate(index)}
         onRename={info => listNameEditRef.current?.show(info)}
         onSort={info => listMusicSortRef.current?.show(info)}
         onDuplicateMusic={info => duplicateMusicRef.current?.show(info)}
@@ -83,7 +83,6 @@ export default () => {
         onRemove={info => { handleRemove(info) }}
         onSync={info => { handleSync(info) }}
         onSelectLocalFile={(info, position) => listImportExportRef.current?.selectFile(info, position)}
-        onMovePosition={handleMovePosition}
       />
     </View>
   )

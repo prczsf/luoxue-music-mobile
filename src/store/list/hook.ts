@@ -70,6 +70,32 @@ export const useMusicList = () => {
   return list
 }
 
+export const useListMusics = (listId: string) => {
+  const [list, setList] = useState<LX.List.ListMusics>([])
+
+  useEffect(() => {
+    let isMounted = true
+    const loadMusics = () => {
+      void getListMusics(listId).then((data) => {
+        if (isMounted) setList([...data])
+      })
+    }
+    const handleChange = (ids: string[]) => {
+      if (!ids.includes(listId)) return
+      loadMusics()
+    }
+
+    loadMusics()
+    global.app_event.on('myListMusicUpdate', handleChange)
+    return () => {
+      isMounted = false
+      global.app_event.off('myListMusicUpdate', handleChange)
+    }
+  }, [listId])
+
+  return list
+}
+
 export const useMusicExistsList = (list: LX.List.MyListInfo, musicInfo: LX.Music.MusicInfo) => {
   const [isExists, setExists] = useState(false)
 

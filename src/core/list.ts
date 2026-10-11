@@ -132,6 +132,9 @@ export const createList = async({ name, id = `userlist_${Date.now()}`, list = []
   sourceListId?: string
   position?: number
 }) => {
+  if (list && list.length) {
+    await overwriteListMusics(id, list)
+  }
   await createUserList(position < 0 ? listState.userList.length : position, [
     {
       id,
@@ -141,7 +144,6 @@ export const createList = async({ name, id = `userlist_${Date.now()}`, list = []
       locationUpdateTime: position < 0 ? null : Date.now(),
     },
   ])
-  if (list) await addListMusics(id, list, settingState.setting['list.addMusicLocationType'])
 }
 
 /**
