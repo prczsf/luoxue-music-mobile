@@ -558,5 +558,15 @@
   "version_title_latest": "🎉 当前版本已是最新 🎊",
   "version_title_new": "🌟 发现新版本 🌟",
   "version_title_unknown": "❓ 获取最新版本信息失败 ❓",
-  "version_title_update": "🚀 软件更新 🚀"
+  "version_title_update": "🚀 软件更新 🚀",
+  "nav_download": "我的下载",
+  "download_empty_tip": "当前下载目录暂无音频文件",
+  "refresh_scan": "重新扫描",
+  "delete_file_confirm": "确定要彻底删除该音频文件吗？",
+  "delete_local_file": "删除本地音频",
+  "delete_failed": "删除失败",
+  "delete_success": "删除成功",
+  "unknown_singer": "未知歌手",
+  "search_music_placeholder": "搜索歌曲...",
+  "add_to_playlist": "添加到歌单"
 }

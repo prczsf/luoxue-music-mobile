@@ -8,6 +8,7 @@ import {
   COMMENT_SCREEN,
   LIST_MANAGE_SCREEN,
   MYLIST_DETAIL_SCREEN,
+  DOWNLOAD_SCREEN,
   // SETTING_SCREEN,
 } from './screenNames'
 
@@ -448,6 +449,56 @@ export function pushMylistDetailScreen(componentId: string, listId: string) {
         passProps: {
           listId,
         },
+        options: {
+          topBar: {
+            visible: false,
+            height: 0,
+            drawBehind: false,
+          },
+          statusBar: {
+            drawBehind: true,
+            visible: true,
+            style: getStatusBarStyle(theme.isDark),
+            backgroundColor: 'transparent',
+          },
+          navigationBar: {
+            backgroundColor: theme['c-content-background'],
+          },
+          layout: {
+            componentBackgroundColor: theme['c-content-background'],
+          },
+          animations: {
+            push: {
+              content: {
+                translationX: {
+                  from: windowSizeTools.getSize().width,
+                  to: 0,
+                  duration: 300,
+                },
+              },
+            },
+            pop: {
+              content: {
+                translationX: {
+                  from: 0,
+                  to: windowSizeTools.getSize().width,
+                  duration: 300,
+                },
+              },
+            },
+          },
+        },
+      },
+    })
+  })
+}
+
+export function pushDownloadScreen(componentId: string) {
+  const theme = themeState.theme
+  requestAnimationFrame(() => {
+    void Navigation.push(componentId, {
+      component: {
+        name: DOWNLOAD_SCREEN,
         options: {
           topBar: {
             visible: false,

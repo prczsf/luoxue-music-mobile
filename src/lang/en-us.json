@@ -558,5 +558,15 @@
   "version_title_latest": "🎉 The current version is already the latest 🎊",
   "version_title_new": "🌟 New version found 🌟",
   "version_title_unknown": "❓ Failed to get the latest version information ❓",
-  "version_title_update": "🚀 App update 🚀"
+  "version_title_update": "🚀 App update 🚀",
+  "nav_download": "My Downloads",
+  "download_empty_tip": "No audio files found in download directory",
+  "refresh_scan": "Rescan",
+  "delete_file_confirm": "Are you sure you want to permanently delete this audio file?",
+  "delete_local_file": "Delete local audio",
+  "delete_failed": "Delete failed",
+  "delete_success": "Deleted successfully",
+  "unknown_singer": "Unknown artist",
+  "search_music_placeholder": "Search songs...",
+  "add_to_playlist": "Add to Playlist"
 }

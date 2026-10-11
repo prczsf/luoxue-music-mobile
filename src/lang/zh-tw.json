@@ -558,5 +558,15 @@
   "version_title_latest": "🎉 目前版本已是最新 🎊",
   "version_title_new": "🌟 發現新版本 🌟",
   "version_title_unknown": "❓ 獲取最新版本資訊失敗 ❓",
-  "version_title_update": "🚀 軟體更新 🚀"
+  "version_title_update": "🚀 軟體更新 🚀",
+  "nav_download": "我的下載",
+  "download_empty_tip": "目前下載目錄暫無音訊檔案",
+  "refresh_scan": "重新掃描",
+  "delete_file_confirm": "確定要徹底刪除該音訊檔案嗎？",
+  "delete_local_file": "刪除本機音訊",
+  "delete_failed": "刪除失敗",
+  "delete_success": "刪除成功",
+  "unknown_singer": "未知歌手",
+  "search_music_placeholder": "搜尋歌曲...",
+  "add_to_playlist": "新增至歌單"
 }
