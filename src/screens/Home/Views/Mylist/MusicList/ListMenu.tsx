@@ -17,6 +17,8 @@ const initSelectInfo = {}
 export interface ListMenuProps {
   onPlay: (selectInfo: SelectInfo) => void
   onPlayLater: (selectInfo: SelectInfo) => void
+  onDownload: (selectInfo: SelectInfo) => void
+  onDownloadQuality: (selectInfo: SelectInfo) => void
   onAdd: (selectInfo: SelectInfo) => void
   onMove: (selectInfo: SelectInfo) => void
   onEditMetadata: (selectInfo: SelectInfo) => void
@@ -53,7 +55,7 @@ export default forwardRef<ListMenuType, ListMenuProps>((props, ref) => {
   useImperativeHandle(ref, () => ({
     show(selectInfo, position) {
       selectInfoRef.current = selectInfo
-      handleSetMenu(selectInfo.musicInfo)
+      handleSetMenu(selectInfo)
       if (visible) menuRef.current?.show(position)
       else {
         setVisible(true)
@@ -64,14 +66,17 @@ export default forwardRef<ListMenuType, ListMenuProps>((props, ref) => {
     },
   }))
 
-  const handleSetMenu = (musicInfo: LX.Music.MusicInfo) => {
+  const handleSetMenu = (selectInfo: SelectInfo) => {
+    const musicInfo = selectInfo.musicInfo
+    const isMultiSelect = selectInfo.selectedList.length > 0
     let edit_metadata = false
     let has_url_cache = false
     const isLocal = musicInfo.source == 'local'
     const menu = [
       { action: 'play', label: t('play') },
       { action: 'playLater', label: t('play_later') },
-      // { action: 'download', label: '下载' },
+      { action: 'download', disabled: isLocal, label: t('list_download') },
+      { action: 'downloadQuality', disabled: isLocal, label: t('list_download_quality') },
       { action: 'add', label: t('add_to') },
       { action: 'move', label: t('move_to') },
       { action: 'changePosition', label: t('change_position') },
@@ -82,8 +87,8 @@ export default forwardRef<ListMenuType, ListMenuProps>((props, ref) => {
       // { action: 'musicSearch', label: t('music_search') },
       { action: 'dislike', disabled: hasDislike(musicInfo), label: t('dislike') },
       { action: 'remove', label: t('delete') },
-    ]
-    if (isLocal) menu.splice(5, 0, { action: 'editMetadata', disabled: !edit_metadata, label: t('edit_metadata') })
+    ].filter(m => !(isMultiSelect && m.action == 'remove'))
+    if (isLocal) menu.splice(6, 0, { action: 'editMetadata', disabled: !edit_metadata, label: t('edit_metadata') })
     setMenus(menu)
     void Promise.all([isLocal ? hasEditMetadata(musicInfo) : Promise.resolve(false), hasUrlCache(musicInfo)]).then(([_edit_metadata, _has_url_cache]) => {
       // console.log(_edit_metadata)
@@ -112,6 +117,12 @@ export default forwardRef<ListMenuType, ListMenuProps>((props, ref) => {
       case 'playLater':
         props.onPlayLater(selectInfo)
 
+        break
+      case 'download':
+        props.onDownload(selectInfo)
+        break
+      case 'downloadQuality':
+        props.onDownloadQuality(selectInfo)
         break
       case 'add':
         props.onAdd(selectInfo)

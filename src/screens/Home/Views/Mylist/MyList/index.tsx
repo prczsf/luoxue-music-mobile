@@ -1,4 +1,16 @@
-import { useEffect, useRef, useState } from 'react'
+import { useRef } from 'react'
+import { StatusBar, TouchableOpacity, View } from 'react-native'
+import { Navigation } from 'react-native-navigation'
+
+import { Icon } from '@/components/common/Icon'
+import Text from '@/components/common/Text'
+import { useTheme } from '@/store/theme/hook'
+import { createStyle } from '@/utils/tools'
+import { scaleSizeH, scaleSizeW } from '@/utils/pixelRatio'
+import { BorderWidths } from '@/theme'
+import { useI18n } from '@/lang'
+import listState from '@/store/list/state'
+import { setActiveList, updateUserListPosition } from '@/core/list'
 
 import ListMenu, { type ListMenuType } from './ListMenu'
 import ListNameEdit, { type ListNameEditType } from './ListNameEdit'
@@ -8,54 +20,98 @@ import { handleRemove, handleSync } from './listAction'
 import ListMusicSort, { type ListMusicSortType } from './ListMusicSort'
 import DuplicateMusic, { type DuplicateMusicType } from './DuplicateMusic'
 
-
-export default () => {
-  const [visible, setVisible] = useState(false)
+/**
+ * 歌单管理页（独立页面，从曲目页头部 [⋮] 进入，back 返回曲目页）
+ * - 分组：固定列表（试听/收藏） / 我的歌单（含歌曲数）
+ * - 右上角 [+] 新建歌单；行 [⋮] 支持上移/下移 等操作
+ * - 点击行：切换到该列表并自动返回曲目页
+ */
+export default ({ componentId }: { componentId: string }) => {
+  const theme = useTheme()
+  const t = useI18n()
   const listMenuRef = useRef<ListMenuType>(null)
   const listNameEditRef = useRef<ListNameEditType>(null)
   const listMusicSortRef = useRef<ListMusicSortType>(null)
   const duplicateMusicRef = useRef<DuplicateMusicType>(null)
   const listImportExportRef = useRef<ListImportExportType>(null)
 
-  useEffect(() => {
-    let isInited = false
-    const changeVisible = (visibleList: boolean) => {
-      if (visibleList && !isInited) {
-        requestAnimationFrame(() => {
-          setVisible(true)
-        })
-        isInited = true
-      }
-    }
-    global.app_event.on('changeLoveListVisible', changeVisible)
-
-    return () => {
-      global.app_event.off('changeLoveListVisible', changeVisible)
-    }
-  }, [])
+  const handleBack = () => {
+    void Navigation.pop(componentId)
+  }
+  const handleCreate = () => {
+    listNameEditRef.current?.showCreate(listState.userList.length)
+  }
+  const handleSelect = (listInfo: LX.List.MyListInfo) => {
+    setActiveList(listInfo.id)
+    void Navigation.pop(componentId)
+  }
+  const handleMovePosition = (listInfo: LX.List.UserListInfo, direction: 'up' | 'down') => {
+    const index = listState.userList.findIndex(l => l.id == listInfo.id)
+    if (index < 0) return
+    const position = direction == 'up' ? index - 1 : index + 1
+    if (position < 0 || position >= listState.userList.length) return
+    void updateUserListPosition(position, [listInfo.id])
+  }
 
   return (
-    visible
-      ? <>
-          <List onShowMenu={(info, position) => listMenuRef.current?.show(info, position)} />
-          <ListNameEdit ref={listNameEditRef} />
-          <ListMusicSort ref={listMusicSortRef} />
-          <DuplicateMusic ref={duplicateMusicRef} />
-          <ListImportExport ref={listImportExportRef} />
-          <ListMenu
-            ref={listMenuRef}
-            onNew={index => listNameEditRef.current?.showCreate(index)}
-            onRename={info => listNameEditRef.current?.show(info)}
-            onSort={info => listMusicSortRef.current?.show(info)}
-            onDuplicateMusic={info => duplicateMusicRef.current?.show(info)}
-            onImport={(info, position) => listImportExportRef.current?.import(info, position)}
-            onExport={(info, position) => listImportExportRef.current?.export(info, position)}
-            onRemove={info => { handleRemove(info) }}
-            onSync={info => { handleSync(info) }}
-            onSelectLocalFile={(info, position) => listImportExportRef.current?.selectFile(info, position)}
-          />
-          {/* <ImportExport actionType={actionType} visible={isShowChoosePath} hide={() => setShowChoosePath(false)} selectedListRef={selectedListRef} /> */}
-        </>
-      : null
+    <View style={[styles.container, { backgroundColor: theme['c-content-background'] }]}>
+      <View style={[styles.header, { paddingTop: StatusBar.currentHeight ?? 0, borderBottomColor: theme['c-border-background'] }]}>
+        <TouchableOpacity style={styles.headerBtn} onPress={handleBack}>
+          <Icon name="chevron-left" size={22} color={theme['c-button-font']} />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle} size={17} color={theme['c-button-font']} numberOfLines={1}>
+          {t('list_manage')}
+        </Text>
+        <TouchableOpacity style={styles.headerBtn} onPress={handleCreate}>
+          <Icon name="add_folder" size={20} color={theme['c-button-font']} />
+        </TouchableOpacity>
+      </View>
+      <List
+        onShowMenu={(info, position) => listMenuRef.current?.show(info, position)}
+        onSelect={handleSelect}
+      />
+      <ListNameEdit ref={listNameEditRef} />
+      <ListMusicSort ref={listMusicSortRef} />
+      <DuplicateMusic ref={duplicateMusicRef} />
+      <ListImportExport ref={listImportExportRef} />
+      <ListMenu
+        ref={listMenuRef}
+        onNew={index => listNameEditRef.current?.showCreate(index)}
+        onRename={info => listNameEditRef.current?.show(info)}
+        onSort={info => listMusicSortRef.current?.show(info)}
+        onDuplicateMusic={info => duplicateMusicRef.current?.show(info)}
+        onImport={(info, position) => listImportExportRef.current?.import(info, position)}
+        onExport={(info, position) => listImportExportRef.current?.export(info, position)}
+        onRemove={info => { handleRemove(info) }}
+        onSync={info => { handleSync(info) }}
+        onSelectLocalFile={(info, position) => listImportExportRef.current?.selectFile(info, position)}
+        onMovePosition={handleMovePosition}
+      />
+    </View>
   )
 }
+
+const styles = createStyle({
+  container: {
+    flex: 1,
+    flexDirection: 'column',
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    height: scaleSizeH(48) + 24,
+    paddingBottom: 24,
+    borderBottomWidth: BorderWidths.normal,
+  },
+  headerBtn: {
+    width: scaleSizeH(48),
+    height: scaleSizeH(48),
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  headerTitle: {
+    flex: 1,
+    fontWeight: 'bold',
+    paddingLeft: scaleSizeW(4),
+  },
+})

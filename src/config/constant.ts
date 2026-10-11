@@ -24,6 +24,7 @@ export enum COMPONENT_IDS {
   home = 'home',
   playDetail = 'playDetail',
   songlistDetail = 'songlistDetail',
+  mylistDetail = 'mylistDetail',
   comment = 'comment',
 }
 
@@ -95,14 +96,14 @@ export const storageDataPrefixOld = {
   notificationTipEnable: '@notification_tip_enable',
 } as const
 
-export const APP_PROVIDER_NAME = 'cn.toside.music.mobile.provider'
+export const APP_PROVIDER_NAME = 'cn.luoxue.music.mobile.provider'
 
 
 export const NAV_MENUS = [
   { id: 'nav_search', icon: 'search-2' },
   { id: 'nav_songlist', icon: 'album' },
   { id: 'nav_top', icon: 'leaderboard' },
-  { id: 'nav_love', icon: 'love' },
+  { id: 'nav_love', icon: 'menu' },
   // { id: 'download', icon: 'download-2' },
   { id: 'nav_setting', icon: 'setting' },
 ] as const

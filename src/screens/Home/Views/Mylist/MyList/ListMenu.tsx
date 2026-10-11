@@ -28,6 +28,7 @@ export interface ListMenuProps {
   onSync: (listInfo: LX.List.UserListInfo) => void
   onSelectLocalFile: (listInfo: LX.List.MyListInfo, index: number) => void
   onRemove: (listInfo: LX.List.UserListInfo) => void
+  onMovePosition: (listInfo: LX.List.UserListInfo, direction: 'up' | 'down') => void
 }
 export interface ListMenuType {
   show: (selectInfo: SelectInfo, position: Position) => void
@@ -47,6 +48,7 @@ export default forwardRef<ListMenuType, ListMenuProps>(({
   onSync,
   onSelectLocalFile,
   onRemove,
+  onMovePosition,
 }, ref) => {
   const t = useI18n()
   const menuRef = useRef<MenuType>(null)
@@ -72,6 +74,7 @@ export default forwardRef<ListMenuType, ListMenuProps>(({
     let rename = false
     let sync = false
     let remove = false
+    let move = false
     let local_file = !listState.fetchingListStatus[listInfo.id]
     let userList: LX.List.UserListInfo
     switch (listInfo.id) {
@@ -82,12 +85,15 @@ export default forwardRef<ListMenuType, ListMenuProps>(({
         userList = listInfo as LX.List.UserListInfo
         rename = true
         remove = true
+        move = true
         sync = !!(userList.source && musicSdk[userList.source]?.songList)
         break
     }
 
     setMenus([
       { action: 'new', label: t('list_create') },
+      { action: 'moveUp', disabled: !move, label: t('list_move_up') },
+      { action: 'moveDown', disabled: !move, label: t('list_move_down') },
       { action: 'rename', disabled: !rename, label: t('list_rename') },
       { action: 'sort', label: t('list_sort') },
       { action: 'duplicateMusic', label: t('lists__duplicate') },
@@ -105,6 +111,12 @@ export default forwardRef<ListMenuType, ListMenuProps>(({
     switch (action) {
       case 'new':
         onNew(Math.max(selectInfo.index - 1, 0))
+        break
+      case 'moveUp':
+        onMovePosition(selectInfo.listInfo as LX.List.UserListInfo, 'up')
+        break
+      case 'moveDown':
+        onMovePosition(selectInfo.listInfo as LX.List.UserListInfo, 'down')
         break
       case 'rename':
         onRename(selectInfo.listInfo as LX.List.UserListInfo)

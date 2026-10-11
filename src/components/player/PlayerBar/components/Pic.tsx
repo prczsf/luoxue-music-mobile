@@ -33,8 +33,8 @@ export default ({ isHome }: { isHome: boolean }) => {
   const handleLongPress = () => {
     if (!isHome) return
     const listId = playerState.playMusicInfo.listId
-    if (!listId || listId == LIST_IDS.DOWNLOAD) return
-    global.app_event.jumpListPosition()
+    if (!listId || listId == LIST_IDS.DOWNLOAD || listId == LIST_IDS.TEMP) return
+    if (commonState.componentIds.home) navigations.pushMylistDetailScreen(commonState.componentIds.home, listId)
   }
 
   const handleError = useCallback((url: string | number) => {

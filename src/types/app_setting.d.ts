@@ -347,9 +347,24 @@ declare global {
       'list.addMusicLocationType': AddMusicLocationType
 
       /**
+       * 我的列表页视图模式
+       */
+      'list.mylistViewMode': 'list' | 'grid'
+
+      /**
        * 文件命名方式
        */
       'download.fileName': '歌名 - 歌手' | '歌手 - 歌名' | '歌名'
+
+      /**
+       * 下载歌曲默认保存目录（为空时每次下载手动选择）
+       */
+      'download.savePath': string
+
+      /**
+       * 默认下载音质
+       */
+      'download.quality': LX.Quality
 
       /**
        * 是否启用同步

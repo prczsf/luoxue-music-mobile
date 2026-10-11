@@ -1,26 +1,33 @@
 import { playList } from '@/core/player/player'
-import { useMemo, useRef, useState, useEffect, forwardRef, useImperativeHandle } from 'react'
-import { FlatList, type NativeScrollEvent, type NativeSyntheticEvent, type FlatListProps } from 'react-native'
+import { useMemo, useRef, useState, useEffect, forwardRef, useImperativeHandle, type ReactNode } from 'react'
+import { Animated, Dimensions, FlatList, StyleSheet, TouchableOpacity, View, type NativeScrollEvent, type NativeSyntheticEvent, type FlatListProps } from 'react-native'
 
 import listState from '@/store/list/state'
 import playerState from '@/store/player/state'
 import { getListPosition, getListPrevSelectId, saveListPosition } from '@/utils/data'
-// import { useMusicList } from '@/store/list/hook'
 import { getListMusics, setActiveList } from '@/core/list'
+import { setNavActiveId } from '@/core/common'
 import ListItem, { ITEM_HEIGHT } from './ListItem'
 import { createStyle, getRowInfo } from '@/utils/tools'
 import { usePlayInfo, usePlayMusicInfo } from '@/store/player/hook'
+import { useTheme } from '@/store/theme/hook'
+import { useI18n } from '@/lang'
+import { Icon } from '@/components/common/Icon'
+import Button from '@/components/common/Button'
+import Text from '@/components/common/Text'
 import type { Position } from './ListMenu'
 import type { SelectMode } from './MultipleModeBar'
 import { useActiveListId } from '@/store/list/hook'
 import { useSettingValue } from '@/store/setting/hook'
 
 type FlatListType = FlatListProps<LX.Music.MusicInfo>
+type ListStatus = 'loading' | 'ready' | 'error'
 
 export interface ListProps {
   onShowMenu: (musicInfo: LX.Music.MusicInfo, index: number, position: Position) => void
   onMuiltSelectMode: () => void
   onSelectAll: (isAll: boolean) => void
+  onSelectCountChange: (count: number) => void
 }
 export interface ListType {
   setIsMultiSelectMode: (isMultiSelectMode: boolean) => void
@@ -31,23 +38,111 @@ export interface ListType {
   scrollToTop: () => void
 }
 
+const SLOW_LOAD_DELAY = 1000
+
 const usePlayIndex = () => {
   const activeListId = useActiveListId()
   const playMusicInfo = usePlayMusicInfo()
   const playInfo = usePlayInfo()
-
   const playIndex = useMemo(() => {
     return playMusicInfo.listId == activeListId ? playInfo.playIndex : -1
   }, [activeListId, playInfo.playIndex, playMusicInfo.listId])
-
   return playIndex
 }
 
+const usePulse = () => {
+  const opacity = useRef(new Animated.Value(0.45)).current
+  useEffect(() => {
+    const loop = Animated.loop(Animated.sequence([
+      Animated.timing(opacity, { toValue: 1, duration: 600, useNativeDriver: true }),
+      Animated.timing(opacity, { toValue: 0.45, duration: 600, useNativeDriver: true }),
+    ]))
+    loop.start()
+    return () => { loop.stop() }
+  }, [opacity])
+  return opacity
+}
 
-const List = forwardRef<ListType, ListProps>(({ onShowMenu, onMuiltSelectMode, onSelectAll }, ref) => {
-  // const t = useI18n()
+const ListSkeleton = ({ showRetry, onRetry, rowNum }: { showRetry?: boolean, onRetry: () => void, rowNum: number }) => {
+  const theme = useTheme()
+  const t = useI18n()
+  const opacity = usePulse()
+  // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion -- RN DimensionValue 需要字面量类型，tsc 与 eslint 推断不一致
+  const rowWidth = `${100 / rowNum}%` as `${number}%`
+  return (
+    <Animated.View style={[styles.stateView, { opacity }]}>
+      <View style={styles.skeletonGrid}>
+        {Array.from({ length: rowNum * 6 }).map((_, i) => (
+          <View key={i} style={[styles.skeletonRow, { width: rowWidth }]}>
+            <View style={[styles.skeletonIndex, { backgroundColor: theme['c-border-background'] }]} />
+            <View style={styles.skeletonInfo}>
+              <View style={[styles.skeletonName, { backgroundColor: theme['c-border-background'] }]} />
+              <View style={[styles.skeletonSub, { backgroundColor: theme['c-border-background'] }]} />
+            </View>
+          </View>
+        ))}
+      </View>
+      {showRetry
+        ? <Button style={styles.retryBtn} onPress={onRetry}>
+            <Text size={13} color={theme['c-primary-font']}>{t('list_retry')}</Text>
+          </Button>
+        : null}
+    </Animated.View>
+  )
+}
+
+const LoadErrorView = ({ onRetry }: { onRetry: () => void }) => {
+  const theme = useTheme()
+  const t = useI18n()
+  return (
+    <TouchableOpacity style={styles.stateView} onPress={onRetry}>
+      <Icon name="help" size={40} color={theme['c-350']} />
+      <Text size={13} style={styles.stateTip} color={theme['c-font-label']}>{t('list_error')}</Text>
+    </TouchableOpacity>
+  )
+}
+
+const ListEmptyView = ({ onSearch }: { onSearch: () => void }) => {
+  const theme = useTheme()
+  const t = useI18n()
+  return (
+    <View style={styles.stateView}>
+      <Icon name="album" size={44} color={theme['c-350']} />
+      <Text size={13} style={styles.stateTip} color={theme['c-font-label']}>{t('list_empty')}</Text>
+      <Button style={styles.emptyBtn} onPress={onSearch}>
+        <Text size={14} color={theme['c-primary-font']}>{t('list_empty_search_btn')}</Text>
+      </Button>
+    </View>
+  )
+}
+
+const TopProgressBar = () => {
+  const theme = useTheme()
+  const anim = useRef(new Animated.Value(0)).current
+  useEffect(() => {
+    const loop = Animated.loop(Animated.sequence([
+      Animated.timing(anim, { toValue: 1, duration: 650, useNativeDriver: true }),
+      Animated.timing(anim, { toValue: 0, duration: 0, useNativeDriver: true }),
+    ]))
+    loop.start()
+    return () => { loop.stop() }
+  }, [anim])
+  const screenWidth = Dimensions.get('window').width
+  const translateX = anim.interpolate({ inputRange: [0, 1], outputRange: [-screenWidth, screenWidth] })
+  return (
+    <View style={styles.progressBarWrap} pointerEvents="none">
+      <Animated.View style={[styles.progressBar, { backgroundColor: theme['c-primary-font-active'], transform: [{ translateX }] }]} />
+    </View>
+  )
+}
+
+const List = forwardRef<ListType, ListProps>((props, ref) => {
+  const { onShowMenu, onMuiltSelectMode, onSelectAll, onSelectCountChange } = props
   const flatListRef = useRef<FlatList>(null)
   const [currentList, setList] = useState<LX.List.ListMusics>([])
+  const [listStatus, setListStatus] = useState<ListStatus>('loading')
+  const [slowLoad, setSlowLoad] = useState(false)
+  const slowTimerRef = useRef<ReturnType<typeof setTimeout>>()
   const listFirstScrollRef = useRef(false)
   const isMultiSelectModeRef = useRef(false)
   const selectModeRef = useRef<SelectMode>('single')
@@ -56,10 +151,17 @@ const List = forwardRef<ListType, ListProps>(({ onShowMenu, onMuiltSelectMode, o
   const selectedListRef = useRef<LX.List.ListMusics>([])
   const currentListIdRef = useRef('')
   const waitJumpListPositionRef = useRef(false)
+  const isUpdateingList = useRef(false)
   const rowInfo = useRef(getRowInfo())
   const isShowAlbumName = useSettingValue('list.isShowAlbumName')
   const isShowInterval = useSettingValue('list.isShowInterval')
-  // console.log('render music list')
+
+  const clearSlowTimer = () => {
+    if (slowTimerRef.current) {
+      clearTimeout(slowTimerRef.current)
+      slowTimerRef.current = undefined
+    }
+  }
 
   useImperativeHandle(ref, () => ({
     setIsMultiSelectMode(isMultiSelectMode) {
@@ -81,6 +183,7 @@ const List = forwardRef<ListType, ListProps>(({ onShowMenu, onMuiltSelectMode, o
       }
       selectedListRef.current = list
       setSelectedList(list)
+      onSelectCountChange(list.length)
     },
     getSelectedList() {
       return selectedListRef.current
@@ -100,36 +203,79 @@ const List = forwardRef<ListType, ListProps>(({ onShowMenu, onMuiltSelectMode, o
     },
   }))
 
-  useEffect(() => {
-    let isUpdateingList = true
-    const updateList = (id: string) => {
-      if (currentListIdRef.current == id) return
-      isUpdateingList = true
-      setList([])
-      currentListIdRef.current = id
-      void Promise.all([getListMusics(id), getListPosition(id)]).then(([list, position]) => {
+  const updateList = (id: string) => {
+    if (currentListIdRef.current == id) return
+    currentListIdRef.current = id
+    setListStatus('loading')
+    isUpdateingList.current = true
+    setSlowLoad(false)
+    clearSlowTimer()
+    slowTimerRef.current = setTimeout(() => { setSlowLoad(true) }, SLOW_LOAD_DELAY)
+    void Promise.all([getListMusics(id), getListPosition(id)]).then(([list, position]) => {
+      requestAnimationFrame(() => {
+        if (currentListIdRef.current != id) return
+        clearSlowTimer()
+        selectedListRef.current = []
+        setSelectedList([])
+        setList([...list])
+        setListStatus('ready')
+        isUpdateingList.current = false
         requestAnimationFrame(() => {
-          if (currentListIdRef.current != id) return
-          selectedListRef.current = []
-          setSelectedList([])
-          setList([...list])
-          requestAnimationFrame(() => {
-            isUpdateingList = false
-            listFirstScrollRef.current = true
-            if (waitJumpListPositionRef.current) {
-              waitJumpListPositionRef.current = false
-              if (playerState.playMusicInfo.listId == id && playerState.playInfo.playIndex > -1) {
-                try {
-                  flatListRef.current?.scrollToIndex({ index: Math.floor(playerState.playInfo.playIndex / (rowInfo.current.rowNum ?? 1)), viewPosition: 0.3, animated: false })
-                  return
-                } catch {}
-              }
+          listFirstScrollRef.current = true
+          if (waitJumpListPositionRef.current) {
+            waitJumpListPositionRef.current = false
+            if (playerState.playMusicInfo.listId == id && playerState.playInfo.playIndex > -1) {
+              try {
+                flatListRef.current?.scrollToIndex({ index: Math.floor(playerState.playInfo.playIndex / (rowInfo.current.rowNum ?? 1)), viewPosition: 0.3, animated: false })
+                return
+              } catch {}
             }
-            flatListRef.current?.scrollToOffset({ offset: position, animated: false })
-          })
+          }
+          flatListRef.current?.scrollToOffset({ offset: position, animated: false })
         })
       })
+    }).catch((err) => {
+      if (currentListIdRef.current != id) return
+      clearSlowTimer()
+      isUpdateingList.current = false
+      console.warn('getListMusics failed', err)
+      setListStatus('error')
+    })
+  }
+
+  const initLoad = () => {
+    setListStatus('loading')
+    setSlowLoad(false)
+    clearSlowTimer()
+    slowTimerRef.current = setTimeout(() => { setSlowLoad(true) }, SLOW_LOAD_DELAY)
+    const handleFail = (err: unknown) => {
+      clearSlowTimer()
+      console.warn('getListPrevSelectId failed', err)
+      setListStatus('error')
     }
+    if (global.lx.jumpMyListPosition) {
+      global.lx.jumpMyListPosition = false
+      if (playerState.playMusicInfo.listId) {
+        waitJumpListPositionRef.current = true
+        updateList(playerState.playMusicInfo.listId)
+      } else void getListPrevSelectId().then(updateList).catch(handleFail)
+    } else void getListPrevSelectId().then(updateList).catch(handleFail)
+  }
+
+  const handleRetry = () => {
+    const id = currentListIdRef.current
+    if (id) {
+      currentListIdRef.current = ''
+      updateList(id)
+    } else initLoad()
+  }
+
+  const handleGoSearch = () => {
+    setNavActiveId('nav_search')
+  }
+
+  useEffect(() => {
+    initLoad()
     const handleChange = (ids: string[]) => {
       if (!ids.includes(listState.activeListId)) return
       const id = listState.activeListId
@@ -138,6 +284,9 @@ const List = forwardRef<ListType, ListProps>(({ onShowMenu, onMuiltSelectMode, o
         selectedListRef.current = []
         setSelectedList([])
         setList([...list])
+        setListStatus('ready')
+      }).catch((err) => {
+        console.warn('getListMusics update failed', err)
       })
     }
 
@@ -149,7 +298,7 @@ const List = forwardRef<ListType, ListProps>(({ onShowMenu, onMuiltSelectMode, o
           setActiveList(listId)
           if (currentListIdRef.current != listId) waitJumpListPositionRef.current = true
         } else if (playerState.playInfo.playIndex > -1) {
-          if (isUpdateingList) waitJumpListPositionRef.current = true
+          if (isUpdateingList.current) waitJumpListPositionRef.current = true
           else {
             try {
               flatListRef.current?.scrollToIndex({ index: Math.floor(playerState.playInfo.playIndex / (rowInfo.current.rowNum ?? 1)), viewPosition: 0.3, animated: true })
@@ -158,13 +307,6 @@ const List = forwardRef<ListType, ListProps>(({ onShowMenu, onMuiltSelectMode, o
         }
       })
     }
-    if (global.lx.jumpMyListPosition) {
-      global.lx.jumpMyListPosition = false
-      if (playerState.playMusicInfo.listId) {
-        waitJumpListPositionRef.current = true
-        updateList(playerState.playMusicInfo.listId)
-      } else void getListPrevSelectId().then(updateList)
-    } else void getListPrevSelectId().then(updateList)
 
     global.state_event.on('mylistToggled', updateList)
     global.app_event.on('myListMusicUpdate', handleChange)
@@ -174,6 +316,7 @@ const List = forwardRef<ListType, ListProps>(({ onShowMenu, onMuiltSelectMode, o
       global.state_event.off('mylistToggled', updateList)
       global.app_event.off('myListMusicUpdate', handleChange)
       global.app_event.off('jumpListPosition', handleJumpPosition)
+      clearSlowTimer()
     }
   }, [])
 
@@ -187,6 +330,7 @@ const List = forwardRef<ListType, ListProps>(({ onShowMenu, onMuiltSelectMode, o
     else if (selectedListRef.current.length == currentList.length) onSelectAll(false)
     selectedListRef.current = newList
     setSelectedList(newList)
+    onSelectCountChange(newList.length)
   }
   const handleSelect = (item: LX.Music.MusicInfo, pressIndex: number) => {
     let newList: LX.List.ListMusics
@@ -221,10 +365,9 @@ const List = forwardRef<ListType, ListProps>(({ onShowMenu, onMuiltSelectMode, o
   }
 
   const handlePress = (item: LX.Music.MusicInfo, index: number) => {
-    // console.log(global.lx.homePagerIdle)
     requestAnimationFrame(() => {
-      // console.log(global.lx.homePagerIdle)
       if (!global.lx.homePagerIdle) return
+      if (listStatus != 'ready') return
       if (isMultiSelectModeRef.current) {
         handleSelect(item, index)
       } else {
@@ -248,7 +391,6 @@ const List = forwardRef<ListType, ListProps>(({ onShowMenu, onMuiltSelectMode, o
     void saveListPosition(listState.activeListId, nativeEvent.contentOffset.y)
   }
 
-
   const renderItem: FlatListType['renderItem'] = ({ item, index }) => (
     <ListItem
       item={item}
@@ -268,24 +410,46 @@ const List = forwardRef<ListType, ListProps>(({ onShowMenu, onMuiltSelectMode, o
     return { length: ITEM_HEIGHT, offset: ITEM_HEIGHT * index, index }
   }
 
+  let body: ReactNode
+  if (listStatus == 'error') {
+    body = <LoadErrorView onRetry={handleRetry} />
+  } else if (listStatus == 'loading' && (slowLoad || !currentList.length)) {
+    body = <ListSkeleton showRetry={slowLoad} onRetry={handleRetry} rowNum={rowInfo.current.rowNum ?? 1} />
+  } else {
+    body = (
+      <>
+        <FlatList
+          ref={flatListRef}
+          onScroll={handleScroll}
+          style={styles.list}
+          contentContainerStyle={currentList.length ? undefined : styles.listEmptyContent}
+          data={currentList}
+          maxToRenderPerBatch={4}
+          numColumns={rowInfo.current.rowNum}
+          horizontal={false}
+          windowSize={8}
+          removeClippedSubviews={true}
+          initialNumToRender={12}
+          renderItem={renderItem}
+          ListEmptyComponent={<ListEmptyView onSearch={handleGoSearch} />}
+          keyExtractor={getkey}
+          extraData={activeIndex}
+          getItemLayout={getItemLayout}
+        />
+        {listStatus == 'loading'
+          ? <>
+              <View style={styles.mask} />
+              <TopProgressBar />
+            </>
+          : null}
+      </>
+    )
+  }
+
   return (
-    <FlatList
-      ref={flatListRef}
-      onScroll={handleScroll}
-      style={styles.list}
-      data={currentList}
-      maxToRenderPerBatch={4}
-      numColumns={rowInfo.current.rowNum}
-      horizontal={false}
-      // updateCellsBatchingPeriod={80}
-      windowSize={8}
-      removeClippedSubviews={true}
-      initialNumToRender={12}
-      renderItem={renderItem}
-      keyExtractor={getkey}
-      extraData={activeIndex}
-      getItemLayout={getItemLayout}
-    />
+    <View style={styles.container}>
+      {body}
+    </View>
   )
 })
 
@@ -296,6 +460,93 @@ const styles = createStyle({
   list: {
     flexGrow: 1,
     flexShrink: 1,
+  },
+  listEmptyContent: {
+    flexGrow: 1,
+  },
+  mask: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    zIndex: 2,
+  },
+  progressBarWrap: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+    height: 2,
+    overflow: 'hidden',
+    zIndex: 3,
+  },
+  progressBar: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    height: 2,
+    width: '55%',
+  },
+  stateView: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingLeft: 30,
+    paddingRight: 30,
+    minHeight: 320,
+  },
+  stateTip: {
+    marginTop: 12,
+    textAlign: 'center',
+  },
+  emptyBtn: {
+    marginTop: 16,
+    paddingTop: 8,
+    paddingBottom: 8,
+    paddingLeft: 22,
+    paddingRight: 22,
+    borderRadius: 18,
+    borderWidth: 1,
+  },
+  retryBtn: {
+    marginTop: 18,
+    paddingTop: 6,
+    paddingBottom: 6,
+    paddingLeft: 18,
+    paddingRight: 18,
+    borderRadius: 14,
+    borderWidth: 1,
+  },
+  skeletonGrid: {
+    alignSelf: 'stretch',
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+  },
+  skeletonRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    height: ITEM_HEIGHT,
+    paddingLeft: 15,
+    paddingRight: 15,
+  },
+  skeletonIndex: {
+    width: 26,
+    height: 13,
+    borderRadius: 3,
+    marginRight: 12,
+  },
+  skeletonInfo: {
+    flexGrow: 1,
+    flexShrink: 1,
+  },
+  skeletonName: {
+    width: '58%',
+    height: 13,
+    borderRadius: 3,
+  },
+  skeletonSub: {
+    width: '34%',
+    height: 10,
+    borderRadius: 3,
+    marginTop: 7,
   },
 })
 

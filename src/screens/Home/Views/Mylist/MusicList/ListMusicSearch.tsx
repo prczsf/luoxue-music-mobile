@@ -1,6 +1,7 @@
 import { useRef, useImperativeHandle, forwardRef, useState, useEffect } from 'react'
 import SearchTipList, { type SearchTipListProps as _SearchTipListProps, type SearchTipListType } from '@/components/SearchTipList'
 import { debounce } from '@/utils'
+import { useI18n } from '@/lang'
 import { searchListMusic } from './listAction'
 import Button from '@/components/common/Button'
 import { createStyle } from '@/utils/tools'
@@ -13,7 +14,7 @@ import listState from '@/store/list/state'
 
 type SearchTipListProps = _SearchTipListProps<LX.Music.MusicInfo>
 interface ListMusicSearchProps {
-  onScrollToInfo: (info: LX.Music.MusicInfo) => void
+  onPlay: (info: LX.Music.MusicInfo) => void
 }
 export const ITEM_HEIGHT = scaleSizeH(46)
 
@@ -28,25 +29,31 @@ export const debounceSearchList = debounce((text: string, list: LX.List.ListMusi
 }, 200)
 
 
-export default forwardRef<ListMusicSearchType, ListMusicSearchProps>(({ onScrollToInfo }, ref) => {
+export default forwardRef<ListMusicSearchType, ListMusicSearchProps>(({ onPlay }, ref) => {
   const searchTipListRef = useRef<SearchTipListType<LX.Music.MusicInfo>>(null)
   const [visible, setVisible] = useState(false)
   const currentListIdRef = useRef('')
   const currentKeywordRef = useRef('')
   const theme = useTheme()
+  const t = useI18n()
+  const [keyword, setKeyword] = useState('')
+  const [resultCount, setResultCount] = useState(0)
 
   const handleShowList = (keyword: string, height: number) => {
     searchTipListRef.current?.setHeight(height)
     currentKeywordRef.current = keyword
+    setKeyword(keyword)
     const id = currentListIdRef.current = listState.activeListId
     if (keyword) {
       void getListMusics(id).then(list => {
         debounceSearchList(keyword, list, (list) => {
           if (currentListIdRef.current != id) return
+          setResultCount(list.length)
           searchTipListRef.current?.setList(list)
         })
       })
     } else {
+      setResultCount(0)
       searchTipListRef.current?.setList([])
     }
   }
@@ -64,6 +71,8 @@ export default forwardRef<ListMusicSearchType, ListMusicSearchProps>(({ onScroll
     hide() {
       currentKeywordRef.current = ''
       currentListIdRef.current = ''
+      setKeyword('')
+      setResultCount(0)
       searchTipListRef.current?.setList([])
     },
   }))
@@ -75,6 +84,7 @@ export default forwardRef<ListMusicSearchType, ListMusicSearchProps>(({ onScroll
       void getListMusics(listState.activeListId).then(list => {
         debounceSearchList(currentKeywordRef.current, list, (list) => {
           if (currentListIdRef.current != id) return
+          setResultCount(list.length)
           searchTipListRef.current?.setList(list)
         })
       })
@@ -95,7 +105,7 @@ export default forwardRef<ListMusicSearchType, ListMusicSearchProps>(({ onScroll
 
   const renderItem = ({ item, index }: { item: LX.Music.MusicInfo, index: number }) => {
     return (
-      <Button style={styles.item} onPress={() => { onScrollToInfo(item) }} key={index}>
+      <Button style={styles.item} onPress={() => { onPlay(item) }} key={index}>
         <View style={styles.itemName}>
           <Text numberOfLines={1}>{item.name}</Text>
           <Text style={styles.subName} numberOfLines={1} size={12} color={theme['c-font-label']}>{item.singer} ({item.meta.albumName})</Text>
@@ -111,13 +121,20 @@ export default forwardRef<ListMusicSearchType, ListMusicSearchProps>(({ onScroll
 
   return (
     visible
-      ? <SearchTipList
-          ref={searchTipListRef}
-          renderItem={renderItem}
-          onPressBg={() => searchTipListRef.current?.setList([])}
-          keyExtractor={getkey}
-          getItemLayout={getItemLayout}
-        />
+      ? <>
+          <SearchTipList
+            ref={searchTipListRef}
+            renderItem={renderItem}
+            onPressBg={() => searchTipListRef.current?.setList([])}
+            keyExtractor={getkey}
+            getItemLayout={getItemLayout}
+          />
+          {keyword && !resultCount
+            ? <View style={{ ...styles.emptyContainer, backgroundColor: theme['c-content-background'] }}>
+                <Text size={13} color={theme['c-font-label']}>{t('list_search_empty')}</Text>
+              </View>
+            : null}
+        </>
       : null
   )
 })
@@ -142,6 +159,16 @@ const styles = createStyle({
   itemSource: {
     flexGrow: 0,
     flexShrink: 0,
+  },
+  emptyContainer: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    width: '100%',
+    paddingTop: scaleSizeH(56),
+    paddingBottom: 20,
+    alignItems: 'center',
+    zIndex: 11,
   },
 })
 

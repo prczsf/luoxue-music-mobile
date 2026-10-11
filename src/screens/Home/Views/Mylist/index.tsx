@@ -1,70 +1,97 @@
-import { useEffect, useRef } from 'react'
-import settingState from '@/store/setting/state'
-import MusicList from './MusicList'
-import MyList from './MyList'
-import { useTheme } from '@/store/theme/hook'
-import DrawerLayoutFixed, { type DrawerLayoutFixedType } from '@/components/common/DrawerLayoutFixed'
-import { COMPONENT_IDS } from '@/config/constant'
-import { scaleSizeW } from '@/utils/pixelRatio'
-import type { InitState as CommonState } from '@/store/common/state'
+import { useCallback, useRef } from 'react'
+import { View } from 'react-native'
 
-const MAX_WIDTH = scaleSizeW(400)
+import { createStyle } from '@/utils/tools'
+import { navigations } from '@/navigation'
+import commonState from '@/store/common/state'
+import listState from '@/store/list/state'
+import { getListMusics, updateUserListPosition } from '@/core/list'
+import { playList } from '@/core/player/player'
 
+import MylistWall from './MylistWall'
+import ListMenu, { type ListMenuType, type Position } from './MyList/ListMenu'
+import ListNameEdit, { type ListNameEditType } from './MyList/ListNameEdit'
+import ListMusicSort, { type ListMusicSortType } from './MyList/ListMusicSort'
+import DuplicateMusic, { type DuplicateMusicType } from './MyList/DuplicateMusic'
+import ListImportExport, { type ListImportExportType } from './MyList/ListImportExport'
+import { handleRemove, handleSync } from './MyList/listAction'
+
+/**
+ * 我的列表页（歌单墙）
+ * - 清单/网格展示歌单：名+歌曲数+更新时间；点卡片 push 详情页；卡片播放按钮直接播该歌单
+ * - 长按/[...]菜单复用歌单操作；右上角新建；管理入口进 LIST_MANAGE_SCREEN
+ */
 export default () => {
-  const drawer = useRef<DrawerLayoutFixedType>(null)
-  const theme = useTheme()
-  // const [width, setWidth] = useState(0)
+  const listMenuRef = useRef<ListMenuType>(null)
+  const listNameEditRef = useRef<ListNameEditType>(null)
+  const listMusicSortRef = useRef<ListMusicSortType>(null)
+  const duplicateMusicRef = useRef<DuplicateMusicType>(null)
+  const listImportExportRef = useRef<ListImportExportType>(null)
 
-  useEffect(() => {
-    const handleFixDrawer = (id: CommonState['navActiveId']) => {
-      if (id == 'nav_love') drawer.current?.fixWidth()
-    }
-    const changeVisible = (visible: boolean) => {
-      if (visible) {
-        requestAnimationFrame(() => {
-          drawer.current?.openDrawer()
-        })
-      } else {
-        drawer.current?.closeDrawer()
-      }
-    }
-
-    // setWidth(getWindowSise().width * 0.82)
-
-    global.state_event.on('navActiveIdUpdated', handleFixDrawer)
-    global.app_event.on('changeLoveListVisible', changeVisible)
-
-    // 就放旋转屏幕后的宽度没有更新的问题
-    // const changeEvent = onDimensionChange(({ window }) => {
-    //   setWidth(window.width * 0.82)
-    //   drawer.current?.setNativeProps({
-    //     width: window.width,
-    //   })
-    // })
-
-    return () => {
-      global.state_event.off('navActiveIdUpdated', handleFixDrawer)
-      global.app_event.off('changeLoveListVisible', changeVisible)
-    // changeEvent.remove()
-    }
+  const handleOpenDetail = useCallback((listInfo: LX.List.MyListInfo) => {
+    navigations.pushMylistDetailScreen(commonState.componentIds.home!, listInfo.id)
   }, [])
 
-  const navigationView = () => <MyList />
-  // console.log('render drawer content')
+  const handlePlayList = useCallback((listInfo: LX.List.MyListInfo) => {
+    void getListMusics(listInfo.id).then(list => {
+      if (!list.length) return
+      void playList(listInfo.id, 0)
+    })
+  }, [])
+
+  const handleShowMenu = useCallback((info: { listInfo: LX.List.MyListInfo, index: number }, position: Position) => {
+    listMenuRef.current?.show(info, position)
+  }, [])
+
+  const handleCreate = useCallback(() => {
+    listNameEditRef.current?.showCreate(listState.userList.length)
+  }, [])
+
+  const handleManage = useCallback(() => {
+    navigations.pushListManageScreen(commonState.componentIds.home!)
+  }, [])
+
+  const handleMovePosition = useCallback((listInfo: LX.List.UserListInfo, direction: 'up' | 'down') => {
+    const index = listState.userList.findIndex(l => l.id == listInfo.id)
+    if (index < 0) return
+    const position = direction == 'up' ? index - 1 : index + 1
+    if (position < 0 || position >= listState.userList.length) return
+    void updateUserListPosition(position, [listInfo.id])
+  }, [])
 
   return (
-    <DrawerLayoutFixed
-      ref={drawer}
-      visibleNavNames={[COMPONENT_IDS.home]}
-      // drawerWidth={width}
-      widthPercentage={0.82}
-      widthPercentageMax={MAX_WIDTH}
-      drawerPosition={settingState.setting['common.drawerLayoutPosition']}
-      renderNavigationView={navigationView}
-      drawerBackgroundColor={theme['c-content-background']}
-      style={{ elevation: 1 }}
-    >
-      <MusicList />
-    </DrawerLayoutFixed>
+    <View style={styles.container}>
+      <MylistWall
+        onOpenDetail={handleOpenDetail}
+        onPlayList={handlePlayList}
+        onShowMenu={handleShowMenu}
+        onCreate={handleCreate}
+        onManage={handleManage}
+      />
+      <ListNameEdit ref={listNameEditRef} />
+      <ListMusicSort ref={listMusicSortRef} />
+      <DuplicateMusic ref={duplicateMusicRef} />
+      <ListImportExport ref={listImportExportRef} />
+      <ListMenu
+        ref={listMenuRef}
+        onNew={index => listNameEditRef.current?.showCreate(index)}
+        onRename={info => listNameEditRef.current?.show(info)}
+        onSort={info => listMusicSortRef.current?.show(info)}
+        onDuplicateMusic={info => duplicateMusicRef.current?.show(info)}
+        onImport={(info, position) => listImportExportRef.current?.import(info, position)}
+        onExport={(info, position) => listImportExportRef.current?.export(info, position)}
+        onRemove={info => { handleRemove(info) }}
+        onSync={info => { handleSync(info) }}
+        onSelectLocalFile={(info, position) => listImportExportRef.current?.selectFile(info, position)}
+        onMovePosition={handleMovePosition}
+      />
+    </View>
   )
 }
+
+const styles = createStyle({
+  container: {
+    flex: 1,
+    flexDirection: 'column',
+  },
+})
