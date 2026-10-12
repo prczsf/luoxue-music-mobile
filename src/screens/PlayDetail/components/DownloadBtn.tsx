@@ -2,7 +2,7 @@ import { memo, useRef } from 'react'
 import { TouchableOpacity, StyleSheet } from 'react-native'
 
 import { Icon } from '@/components/common/Icon'
-import { usePlayerMusicInfo } from '@/store/player/hook'
+import { usePlayMusicInfo } from '@/store/player/hook'
 import { checkStoragePermissions, requestStoragePermission, toast } from '@/utils/tools'
 import { getDownloadDir } from '@/core/downloadPath'
 import { downloadMusicFile } from '@/core/downloadMusic'
@@ -16,12 +16,14 @@ export const HEADER_HEIGHT = scaleSizeH(_HEADER_HEIGHT)
 
 export default memo(() => {
   const t = useI18n()
-  const musicInfo = usePlayerMusicInfo()
+  const playMusicInfo = usePlayMusicInfo()
 
   const modalRef = useRef<DownloadQualityModalType<LX.Music.MusicInfoOnline>>(null)
 
-  const onlineMusic = musicInfo as unknown as LX.Music.MusicInfoOnline
-  if (!onlineMusic?.id || (onlineMusic as any).source == 'local') return null
+  const onlineMusic = (playMusicInfo.musicInfo && 'source' in playMusicInfo.musicInfo && playMusicInfo.musicInfo.source != 'local')
+    ? (playMusicInfo.musicInfo as LX.Music.MusicInfoOnline)
+    : null
+  if (!onlineMusic?.id) return null
 
   const runDownload = async(quality?: LX.Quality) => {
     const granted = await checkStoragePermissions() || await requestStoragePermission()

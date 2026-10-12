@@ -1,13 +1,16 @@
-import { useRef, forwardRef, useImperativeHandle } from 'react'
+import { useRef, forwardRef, useImperativeHandle, useCallback } from 'react'
 import { View } from 'react-native'
 // import LoadingMask, { LoadingMaskType } from '@/components/common/LoadingMask'
 import List, { type ListProps, type ListType, type Status, type RowInfoType } from './List'
 import ListMenu, { type ListMenuType, type Position, type SelectInfo } from './ListMenu'
 import ListMusicMultiAdd, { type MusicMultiAddModalType as ListAddMultiType } from '@/components/MusicMultiAddModal'
 import ListMusicAdd, { type MusicAddModalType as ListMusicAddType } from '@/components/MusicAddModal'
+import DownloadQualityModal, { type DownloadQualityModalType } from '@/components/DownloadQualityModal'
 import MultipleModeBar, { type MultipleModeBarType, type SelectMode } from './MultipleModeBar'
 import { clearMusicUrl, handleDislikeMusic, handlePlay, handlePlayLater, handleShare, handleShowMusicSourceDetail } from './listAction'
-import { createStyle } from '@/utils/tools'
+import { createStyle, checkStoragePermissions, requestStoragePermission, toast } from '@/utils/tools'
+import { downloadMusicFile, getDownloadDir } from '@/core/downloadMusic'
+import settingState from '@/store/setting/state'
 
 export interface OnlineListProps {
   onRefresh: ListProps['onRefresh']
@@ -37,6 +40,7 @@ export default forwardRef<OnlineListType, OnlineListProps>(({
   const listMusicAddRef = useRef<ListMusicAddType>(null)
   const listMusicMultiAddRef = useRef<ListAddMultiType>(null)
   const listMenuRef = useRef<ListMenuType>(null)
+  const downloadQualityModalRef = useRef<DownloadQualityModalType<SelectInfo>>(null)
   // const loadingMaskRef = useRef<LoadingMaskType>(null)
 
   useImperativeHandle(ref, () => ({
@@ -78,6 +82,37 @@ export default forwardRef<OnlineListType, OnlineListProps>(({
     }
   }
 
+  const runDownload = useCallback((info: SelectInfo, quality?: LX.Quality) => {
+    void (async() => {
+      const granted = await checkStoragePermissions() || await requestStoragePermission()
+      if (!granted) {
+        toast(global.i18n.t('storage_permission_tip_disagree'), 'long')
+        return
+      }
+      const dir = await getDownloadDir()
+      const list = info.selectedList.length ? info.selectedList : [info.musicInfo]
+      for (const item of list) {
+        void downloadMusicFile(item, dir, quality)
+      }
+    })()
+  }, [])
+
+  const handleDownload = useCallback((info: SelectInfo) => {
+    if (settingState.setting['download.askQuality']) {
+      downloadQualityModalRef.current?.show(info)
+    } else {
+      runDownload(info)
+    }
+  }, [runDownload])
+
+  const handleDownloadQuality = useCallback((info: SelectInfo) => {
+    downloadQualityModalRef.current?.show(info)
+  }, [])
+
+  const handleDownloadQualityConfirm = useCallback((info: SelectInfo, quality: LX.Quality) => {
+    runDownload(info, quality)
+  }, [runDownload])
+
   return (
     <View style={styles.container}>
       <View style={{ flex: 1 }}>
@@ -109,10 +144,13 @@ export default forwardRef<OnlineListType, OnlineListProps>(({
         onPlayLater={info => { hancelExitSelect(); handlePlayLater(info.musicInfo, info.selectedList, hancelExitSelect) }}
         onCopyName={info => { handleShare(info.musicInfo) }}
         onAdd={handleAddMusic}
+        onDownload={handleDownload}
+        onDownloadQuality={handleDownloadQuality}
         onMusicSourceDetail={info => { void handleShowMusicSourceDetail(info.musicInfo) }}
         onRemoveCache={info => { void clearMusicUrl(info.musicInfo) }}
         onDislikeMusic={info => { void handleDislikeMusic(info.musicInfo) }}
       />
+      <DownloadQualityModal ref={downloadQualityModalRef} onConfirm={handleDownloadQualityConfirm} />
       {/* <LoadingMask ref={loadingMaskRef} /> */}
     </View>
   )

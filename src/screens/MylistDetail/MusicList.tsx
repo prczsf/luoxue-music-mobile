@@ -170,7 +170,10 @@ export default ({ listId }: { listId: string }) => {
       }
       selectedInfoRef.current = info
       const dir = await getDownloadDir()
-      void downloadMusicFile(info.musicInfo, dir, quality)
+      const list = info.selectedList.length ? info.selectedList : [info.musicInfo]
+      for (const item of list) {
+        void downloadMusicFile(item, dir, quality)
+      }
     })()
   }, [])
   const handleDownload = useCallback((info: SelectInfo) => {
