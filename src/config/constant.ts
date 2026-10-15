@@ -12,6 +12,7 @@ export const LIST_IDS = {
   LOVE: 'love',
   TEMP: 'temp',
   DOWNLOAD: 'download',
+  ROAMING: 'lxm_roaming',
   PLAY_LATER: null,
 } as const
 
@@ -79,6 +80,10 @@ export const storageDataPrefix = {
 
   dislikeList: '@dislike_list',
 
+  roamingExcludeLists: '@roaming_exclude_lists',
+  roamingLru: '@roaming_lru',
+  roamingIndexCache: '@roaming_index_cache',
+
   userApi: '@user_api__',
 } as const
 
@@ -105,6 +110,7 @@ export const NAV_MENUS = [
   { id: 'nav_songlist', icon: 'album' },
   { id: 'nav_top', icon: 'leaderboard' },
   { id: 'nav_love', icon: 'menu' },
+  { id: 'nav_roaming', icon: 'list-random' },
   // { id: 'download', icon: 'download-2' },
   { id: 'nav_setting', icon: 'setting' },
 ] as const

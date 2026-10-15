@@ -33,7 +33,7 @@ export default ({ isHome }: { isHome: boolean }) => {
   const handleLongPress = () => {
     if (!isHome) return
     const listId = playerState.playMusicInfo.listId
-    if (!listId || listId == LIST_IDS.DOWNLOAD || listId == LIST_IDS.TEMP) return
+    if (!listId || listId == LIST_IDS.DOWNLOAD || listId == LIST_IDS.TEMP || listId == LIST_IDS.ROAMING) return
     if (commonState.componentIds.home) navigations.pushMylistDetailScreen(commonState.componentIds.home, listId)
   }
 

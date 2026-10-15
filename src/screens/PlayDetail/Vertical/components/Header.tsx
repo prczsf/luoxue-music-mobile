@@ -15,6 +15,8 @@ import { HEADER_HEIGHT as _HEADER_HEIGHT, LIST_IDS, NAV_SHEAR_NATIVE_IDS } from 
 import { BorderWidths } from '@/theme'
 import commonState from '@/store/common/state'
 import listState from '@/store/list/state'
+import { useRoamingStatus } from '@/core/roaming'
+import { setNavActiveId } from '@/core/common'
 import SettingPopup, { type SettingPopupType } from '../../components/SettingPopup'
 import { useStatusbarHeight } from '@/store/common/hook'
 import Btn from './Btn'
@@ -22,7 +24,6 @@ import TimeoutExitBtn from './TimeoutExitBtn'
 import DownloadBtn from '../../components/DownloadBtn'
 
 export const HEADER_HEIGHT = scaleSizeH(_HEADER_HEIGHT)
-
 
 
 const Title = () => {
@@ -33,15 +34,25 @@ const Title = () => {
   const t = useI18n()
 
   const listId = playMusicInfo.listId
+  const roaming = useRoamingStatus()
+  const isRoamingSource = listId === LIST_IDS.ROAMING && roaming.active
   const listName = useMemo(() => {
-    if (!listId || listId === LIST_IDS.DOWNLOAD || listId === LIST_IDS.TEMP) return ''
+    if (isRoamingSource) return t('roaming_source_label', { name: roaming.sourceLabel })
+    if (!listId || listId === LIST_IDS.DOWNLOAD || listId === LIST_IDS.TEMP || listId === LIST_IDS.ROAMING) return ''
     if (listId === LIST_IDS.DEFAULT) return t('list_name_default')
     if (listId === LIST_IDS.LOVE) return t('list_name_love')
     return allList.find(l => l.id === listId)?.name ?? ''
-  }, [listId, allList, t])
+  }, [listId, allList, t, isRoamingSource, roaming.sourceLabel])
 
   const handleGoPlaylist = () => {
     if (!listId || !listName) return
+    // 漫游来源不是真实歌单：关闭播放页并回到漫游页（等价于歌单胶囊"回到来源歌单"）
+    if (isRoamingSource) {
+      const roamingPlayDetailId = commonState.componentIds.playDetail
+      if (roamingPlayDetailId) void pop(roamingPlayDetailId)
+      requestAnimationFrame(() => { setNavActiveId('nav_roaming') })
+      return
+    }
     const isMylist = listId === LIST_IDS.DEFAULT || listId === LIST_IDS.LOVE || allList.some(l => l.id === listId)
     if (!isMylist) return
 
@@ -92,6 +103,7 @@ const Title = () => {
             <Text numberOfLines={1} size={11} style={styles.capsuleText} color={theme['c-button-font']}>
               {listName}
             </Text>
+            {/* 漫游来源跳转到漫游页，与其他歌单胶囊一致显示箭头 */}
             <Icon name="chevron-right" size={10} color={theme['c-button-font']} />
           </TouchableOpacity>
         ) : null}

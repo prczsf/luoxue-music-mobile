@@ -9,6 +9,8 @@ import playerState from '@/store/player/state'
 import Text from '@/components/common/Text'
 import { LIST_IDS } from '@/config/constant'
 import { createStyle, formatMusicName } from '@/utils/tools'
+import { useRoamingStatus } from '@/core/roaming'
+import { useI18n } from '@/lang'
 
 
 export default ({ isHome }: { isHome: boolean }) => {
@@ -16,6 +18,9 @@ export default ({ isHome }: { isHome: boolean }) => {
   const musicInfo = usePlayerMusicInfo()
   const downloadFileName = useSettingValue('download.fileName')
   const theme = useTheme()
+  const t = useI18n()
+  const roaming = useRoamingStatus()
+  const isRoamingSource = roaming.active && playerState.playMusicInfo.listId == LIST_IDS.ROAMING
 
   const handlePress = () => {
     // console.log('')
@@ -27,7 +32,7 @@ export default ({ isHome }: { isHome: boolean }) => {
 
   const handleLongPress = () => {
     const listId = playerState.playMusicInfo.listId
-    if (!listId || listId == LIST_IDS.DOWNLOAD || listId == LIST_IDS.TEMP) return
+    if (!listId || listId == LIST_IDS.DOWNLOAD || listId == LIST_IDS.TEMP || listId == LIST_IDS.ROAMING) return
     if (isHome && commonState.componentIds.home) {
       navigations.pushMylistDetailScreen(commonState.componentIds.home, listId)
     } else {
@@ -45,6 +50,12 @@ export default ({ isHome }: { isHome: boolean }) => {
   return (
     <TouchableOpacity style={styles.container} onLongPress={handleLongPress} onPress={handlePress} activeOpacity={0.7} >
       <Text color={theme['c-font-label']} numberOfLines={1}>{title}</Text>
+      {/* 漫游态来源小字（roaming-plan §3.6），非漫游态不渲染保持零布局变化 */}
+      {isRoamingSource ? (
+        <Text size={11} color={theme['c-font-label']} numberOfLines={1}>
+          {t('roaming_source_label', { name: roaming.sourceLabel })}
+        </Text>
+      ) : null}
     </TouchableOpacity>
   )
 }

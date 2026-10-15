@@ -27,7 +27,7 @@ import BackgroundTimer from 'react-native-background-timer'
 import { checkIgnoringBatteryOptimization, checkNotificationPermission, debounceBackgroundTimer } from '@/utils/tools'
 import { LIST_IDS } from '@/config/constant'
 import { addListMusics, removeListMusics, getListMusics } from '@/core/list'
-import { addDislikeInfo } from '@/core/dislikeList'
+import { addDislikeInfo, hasDislike } from '@/core/dislikeList'
 
 // import { checkMusicFileAvailable } from '@renderer/utils/music'
 
@@ -341,6 +341,16 @@ export const getNextPlayMusicInfo = async(): Promise<LX.Player.PlayMusicInfo | n
   if (!currentListId) return null
   const currentList = getList(currentListId)
 
+  // 漫游列表：恒取窗口内下一首（ADR 0003 §2），尾部无歌 = 续杯失败，停在当前歌
+  if (currentListId == LIST_IDS.ROAMING) {
+    const roamingList = currentList as LX.Music.MusicInfo[]
+    for (let i = playInfo.playerPlayIndex + 1; i < roamingList.length; i++) {
+      const musicInfo = roamingList[i]
+      if (musicInfo && !hasDislike(musicInfo)) return { musicInfo, listId: currentListId, isTempPlay: false }
+    }
+    return null
+  }
+
   const playedList = playerState.playedList
   if (playedList.length) { // 移除已播放列表内不存在原列表的歌曲
     let currentId: string
@@ -435,8 +445,20 @@ export const playNext = async(isAutoToggle = false): Promise<void> => {
   if (!currentListId) return handleToggleStop()
   const currentList = getList(currentListId)
 
-  const playedList = playerState.playedList
+  // 漫游列表：恒取窗口内下一首（ADR 0003 §2），忽略随机/循环模式；尾部无歌 = 续杯失败，停在当前歌
+  if (currentListId == LIST_IDS.ROAMING) {
+    const roamingList = currentList as LX.Music.MusicInfo[]
+    for (let i = playInfo.playerPlayIndex + 1; i < roamingList.length; i++) {
+      const musicInfo = roamingList[i]
+      if (musicInfo && !hasDislike(musicInfo)) {
+        await handlePlayNext({ musicInfo, listId: currentListId, isTempPlay: false })
+        return
+      }
+    }
+    return
+  }
 
+  const playedList = playerState.playedList
   if (playedList.length) { // 移除已播放列表内不存在原列表的歌曲
     let currentId: string
     if (playMusicInfo.isTempPlay) {
