@@ -7,8 +7,6 @@ import { Icon } from '@/components/common/Icon'
 import { confirmDialog, createStyle, exitApp as backHome } from '@/utils/tools'
 import { NAV_MENUS } from '@/config/constant'
 import type { InitState } from '@/store/common/state'
-import { navigations } from '@/navigation'
-import commonState from '@/store/common/state'
 import { exitApp, setNavActiveId } from '@/core/common'
 import Text from '@/components/common/Text'
 import { useSettingValue } from '@/store/setting/hook'
@@ -70,7 +68,7 @@ const Header = () => {
   )
 }
 
-type IdType = InitState['navActiveId'] | 'nav_exit' | 'back_home' | 'nav_download'
+type IdType = InitState['navActiveId'] | 'nav_exit' | 'back_home'
 
 const MenuItem = ({ id, icon, onPress }: {
   id: IdType
@@ -104,12 +102,6 @@ export default memo(() => {
 
   const handlePress = (id: IdType) => {
     switch (id) {
-      case 'nav_download':
-        global.app_event.changeMenuVisible(false)
-        if (commonState.componentIds.home) {
-          navigations.pushDownloadScreen(commonState.componentIds.home)
-        }
-        return
       case 'nav_exit':
         void confirmDialog({
           message: global.i18n.t('exit_app_tip'),
@@ -135,7 +127,6 @@ export default memo(() => {
       <ScrollView style={styles.menus}>
         <View style={styles.list}>
           {NAV_MENUS.map(menu => <MenuItem key={menu.id} id={menu.id} icon={menu.icon} onPress={handlePress} />)}
-          <MenuItem id="nav_download" icon="download-2" onPress={handlePress} />
         </View>
       </ScrollView>
 

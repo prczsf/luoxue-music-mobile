@@ -1,13 +1,12 @@
 import { useRef } from 'react'
-import { StatusBar, TouchableOpacity, View } from 'react-native'
+import { TouchableOpacity, View } from 'react-native'
 import { Navigation } from 'react-native-navigation'
 
 import { Icon } from '@/components/common/Icon'
-import Text from '@/components/common/Text'
+import PageHeader from '@/components/PageHeader'
 import { useTheme } from '@/store/theme/hook'
 import { createStyle } from '@/utils/tools'
-import { scaleSizeH, scaleSizeW } from '@/utils/pixelRatio'
-import { BorderWidths } from '@/theme'
+import { scaleSizeH } from '@/utils/pixelRatio'
 import { useI18n } from '@/lang'
 import listState from '@/store/list/state'
 import { setActiveList, updateUserListPosition } from '@/core/list'
@@ -55,17 +54,13 @@ export default ({ componentId }: { componentId: string }) => {
 
   return (
     <View style={[styles.container, { backgroundColor: theme['c-content-background'] }]}>
-      <View style={[styles.header, { paddingTop: StatusBar.currentHeight ?? 0, borderBottomColor: theme['c-border-background'] }]}>
-        <TouchableOpacity style={styles.headerBtn} onPress={handleBack}>
-          <Icon name="chevron-left" size={22} color={theme['c-button-font']} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle} size={17} color={theme['c-button-font']} numberOfLines={1}>
-          {t('list_manage')}
-        </Text>
-        <TouchableOpacity style={styles.headerBtn} onPress={handleCreate}>
+      <PageHeader
+        title={t('list_manage')}
+        onBack={handleBack}
+        right={<TouchableOpacity style={styles.headerBtn} onPress={handleCreate}>
           <Icon name="add_folder" size={20} color={theme['c-button-font']} />
-        </TouchableOpacity>
-      </View>
+        </TouchableOpacity>}
+      />
       <List
         onShowMenu={(info, position) => listMenuRef.current?.show(info, position)}
         onSelect={handleSelect}
@@ -96,22 +91,10 @@ const styles = createStyle({
     flex: 1,
     flexDirection: 'column',
   },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    height: scaleSizeH(48) + 24,
-    paddingBottom: 24,
-    borderBottomWidth: BorderWidths.normal,
-  },
   headerBtn: {
     width: scaleSizeH(48),
-    height: scaleSizeH(48),
+    height: '100%',
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  headerTitle: {
-    flex: 1,
-    fontWeight: 'bold',
-    paddingLeft: scaleSizeW(4),
   },
 })

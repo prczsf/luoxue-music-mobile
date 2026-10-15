@@ -7,7 +7,6 @@ import {
   PlayDetail,
   SonglistDetail,
   MylistDetail,
-  Download,
   ListManage,
   Comment,
   // Setting,
@@ -21,7 +20,6 @@ import {
   COMMENT_SCREEN,
   LIST_MANAGE_SCREEN,
   MYLIST_DETAIL_SCREEN,
-  DOWNLOAD_SCREEN,
   VERSION_MODAL,
   PACT_MODAL,
   SYNC_MODE_MODAL,
@@ -52,7 +50,6 @@ export default () => {
   Navigation.registerComponent(COMMENT_SCREEN, () => WrappedComponent(Comment))
   Navigation.registerComponent(LIST_MANAGE_SCREEN, () => WrappedComponent(ListManage))
   Navigation.registerComponent(MYLIST_DETAIL_SCREEN, () => WrappedComponent(MylistDetail))
-  Navigation.registerComponent(DOWNLOAD_SCREEN, () => WrappedComponent(Download))
   Navigation.registerComponent(VERSION_MODAL, () => WrappedComponent(VersionModal))
   Navigation.registerComponent(PACT_MODAL, () => WrappedComponent(PactModal))
   Navigation.registerComponent(SYNC_MODE_MODAL, () => WrappedComponent(SyncModeModal))

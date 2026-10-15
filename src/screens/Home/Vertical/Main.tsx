@@ -6,6 +6,7 @@ import Mylist from '../Views/Mylist'
 import Leaderboard from '../Views/Leaderboard'
 import Roaming from '../Views/Roaming'
 import Setting from '../Views/Setting'
+import Download from '../Views/Download'
 import commonState, { type InitState as CommonState } from '@/store/common/state'
 import { createStyle } from '@/utils/tools'
 import PagerView, { type PageScrollStateChangedNativeEvent, type PagerViewOnPageSelectedEvent } from 'react-native-pager-view'
@@ -193,6 +194,40 @@ const RoamingPage = () => {
   }, [])
   return visible ? component : null
 }
+const DownloadPage = () => {
+  const [visible, setVisible] = useState(commonState.navActiveId == 'nav_download')
+  const component = useMemo(() => <Download />, [])
+  useEffect(() => {
+    let currentId: CommonState['navActiveId'] = commonState.navActiveId
+    const handleNavIdUpdate = (id: CommonState['navActiveId']) => {
+      currentId = id
+      if (id == 'nav_download') {
+        requestAnimationFrame(() => {
+          setVisible(true)
+        })
+      }
+    }
+    const handleHide = () => {
+      if (currentId != 'nav_setting') return
+      setVisible(false)
+    }
+    const handleConfigUpdated = (keys: Array<keyof LX.AppSetting>) => {
+      if (keys.some(k => hideKeys.includes(k))) handleHide()
+    }
+    global.state_event.on('navActiveIdUpdated', handleNavIdUpdate)
+    global.state_event.on('themeUpdated', handleHide)
+    global.state_event.on('languageChanged', handleHide)
+    global.state_event.on('configUpdated', handleConfigUpdated)
+
+    return () => {
+      global.state_event.off('navActiveIdUpdated', handleNavIdUpdate)
+      global.state_event.off('themeUpdated', handleHide)
+      global.state_event.off('languageChanged', handleHide)
+      global.state_event.off('configUpdated', handleConfigUpdated)
+    }
+  }, [])
+  return visible ? component : null
+}
 const SettingPage = () => {
   const [visible, setVisible] = useState(commonState.navActiveId == 'nav_setting')
   const component = useMemo(() => <Setting />, [])
@@ -220,6 +255,7 @@ const viewMap = {
   nav_love: 3,
   nav_roaming: 4,
   nav_setting: 5,
+  nav_download: 6,
 }
 const indexMap = [
   'nav_search',
@@ -228,6 +264,7 @@ const indexMap = [
   'nav_love',
   'nav_roaming',
   'nav_setting',
+  'nav_download',
 ] as const
 
 const Main = () => {
@@ -328,6 +365,9 @@ const Main = () => {
       </View>
       <View collapsable={false} key="nav_setting" style={styles.pageStyle}>
         <SettingPage />
+      </View>
+      <View collapsable={false} key="nav_download" style={styles.pageStyle}>
+        <DownloadPage />
       </View>
       {/* <View collapsable={false} key="nav_search" style={styles.pageStyle}>
         <Search />

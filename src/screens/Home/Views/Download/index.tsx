@@ -2,26 +2,20 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   FlatList,
   Modal,
-  StatusBar,
   TextInput,
   TouchableOpacity,
   TouchableWithoutFeedback,
   View,
 } from 'react-native'
-import { Navigation } from 'react-native-navigation'
 
 import { Icon } from '@/components/common/Icon'
 import Text from '@/components/common/Text'
 import Button from '@/components/common/Button'
-import PageContent from '@/components/PageContent'
-import StatusBarView from '@/components/common/StatusBar'
-import PlayerBar from '@/components/player/PlayerBar'
 import MusicAddModal, { type MusicAddModalType } from '@/components/MusicAddModal'
 
 import { useTheme } from '@/store/theme/hook'
 import { useI18n } from '@/lang'
-import { COMPONENT_IDS, LIST_IDS } from '@/config/constant'
-import { setComponentId } from '@/core/common'
+import { LIST_IDS } from '@/config/constant'
 import { getDownloadDir } from '@/core/downloadPath'
 import { playList } from '@/core/player/player'
 import { setTempList } from '@/core/list'
@@ -32,11 +26,12 @@ import { checkStoragePermissions, confirmDialog, createStyle, requestStoragePerm
 import { scaleSizeH, scaleSizeW } from '@/utils/pixelRatio'
 import { BorderWidths } from '@/theme'
 
-interface DownloadScreenProps {
-  componentId: string
-}
-
-export default memo(({ componentId }: DownloadScreenProps) => {
+/**
+ * 我的下载（Home 内页，与其它侧边栏项同一布局：共用 Home 顶部栏 / PlayerBar / 抽屉）
+ * - 扫描下载目录音频文件：先按文件名秒级上屏，再异步补全 metadata
+ * - 点行播放、[⋮] 添加到歌单 / 删除本地文件
+ */
+export default memo(() => {
   const theme = useTheme()
   const t = useI18n()
 
@@ -48,10 +43,6 @@ export default memo(({ componentId }: DownloadScreenProps) => {
   // 选中的单曲操作
   const [selectedMusic, setSelectedMusic] = useState<LX.Music.MusicInfoLocal | null>(null)
   const musicAddModalRef = useRef<MusicAddModalType>(null)
-
-  useEffect(() => {
-    setComponentId(COMPONENT_IDS.download, componentId)
-  }, [componentId])
 
   const loadDownloads = useCallback(async() => {
     setLoading(true)
@@ -102,10 +93,6 @@ export default memo(({ componentId }: DownloadScreenProps) => {
   useEffect(() => {
     void loadDownloads()
   }, [loadDownloads])
-
-  const handleBack = () => {
-    void Navigation.pop(componentId)
-  }
 
   // 搜索过滤后的列表
   const filteredList = useMemo(() => {
@@ -197,22 +184,7 @@ export default memo(({ componentId }: DownloadScreenProps) => {
   )
 
   return (
-    <PageContent>
-      <StatusBarView />
-
-      {/* 顶部 Header */}
-      <View style={[styles.header, { paddingTop: StatusBar.currentHeight ?? 0, borderBottomColor: theme['c-border-background'] }]}>
-        <TouchableOpacity style={styles.headerBtn} onPress={handleBack}>
-          <Icon name="chevron-left" size={22} color={theme['c-button-font']} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle} size={17} color={theme['c-button-font']} numberOfLines={1}>
-          {t('nav_download') ?? '我的下载'} ({filteredList.length})
-        </Text>
-        <TouchableOpacity style={styles.headerBtn} onPress={() => { void loadDownloads() }}>
-          <Icon name="refresh" size={19} color={theme['c-button-font']} />
-        </TouchableOpacity>
-      </View>
-
+    <View style={styles.container}>
       {/* 操作栏与搜索栏 */}
       <View style={[styles.controlBar, { borderBottomColor: theme['c-border-background'] }]}>
         <Button style={styles.playAllBtn} onPress={() => { void handlePlayAll() }}>
@@ -237,6 +209,9 @@ export default memo(({ componentId }: DownloadScreenProps) => {
             </TouchableOpacity>
           ) : null}
         </View>
+        <TouchableOpacity style={styles.refreshBtn} onPress={() => { void loadDownloads() }}>
+          <Icon name="refresh" size={19} color={theme['c-button-font']} />
+        </TouchableOpacity>
       </View>
 
       {/* 列表区 */}
@@ -313,29 +288,14 @@ export default memo(({ componentId }: DownloadScreenProps) => {
       ) : null}
 
       <MusicAddModal ref={musicAddModalRef} />
-      <PlayerBar />
-    </PageContent>
+    </View>
   )
 })
 
 const styles = createStyle({
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    height: scaleSizeH(48) + 24,
-    paddingBottom: 24,
-    borderBottomWidth: BorderWidths.normal,
-  },
-  headerBtn: {
-    width: scaleSizeH(48),
-    height: scaleSizeH(48),
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  headerTitle: {
+  container: {
     flex: 1,
-    fontWeight: 'bold',
-    paddingLeft: scaleSizeW(4),
+    flexDirection: 'column',
   },
   controlBar: {
     flexDirection: 'row',
@@ -366,11 +326,17 @@ const styles = createStyle({
     paddingVertical: 0,
     fontSize: 12,
   },
+  refreshBtn: {
+    width: scaleSizeW(34),
+    height: scaleSizeH(34),
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   content: {
     flex: 1,
   },
   listContent: {
-    paddingBottom: scaleSizeH(60),
+    paddingBottom: scaleSizeH(16),
   },
   listItem: {
     flexDirection: 'row',
