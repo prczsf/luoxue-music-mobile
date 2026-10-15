@@ -13,14 +13,16 @@ import SpectrumBars from './SpectrumBars'
 
 /**
  * Hero 卡片区（roaming-plan §3.3）
- * - 全部歌曲：一击起播；激活态高亮 + 频谱动画；再点 = 换一批
- * - 空态（总歌 <5）：半透明遮罩 + 引导文案，点击滚到下方歌手区块
+ * - 全部歌曲：一击起播；激活态高亮 + 频谱动画 +「重新洗牌」按钮；再点卡片 = 换一批
+ * - 右上角过滤入口：弹出排除歌单弹层（与工具栏同一入口）
+ * - 空态（总歌 <5）：半透明遮罩 + 引导文案，点击滚到下方风格盲盒
  * （熟歌热歌 Hero 属 P2，本组件暂不渲染）
  */
-export default ({ status, index, onScrollToArtists }: {
+export default ({ status, index, onScrollToGenre, onOpenFilter }: {
   status: RoamingStatus
   index: RoamingIndex | null
-  onScrollToArtists: () => void
+  onScrollToGenre: () => void
+  onOpenFilter: () => void
 }) => {
   const theme = useTheme()
   const t = useI18n()
@@ -44,7 +46,7 @@ export default ({ status, index, onScrollToArtists }: {
 
   const handleEmptyPress = (e: GestureResponderEvent) => {
     e.stopPropagation?.()
-    onScrollToArtists()
+    onScrollToGenre()
   }
 
   return (
@@ -71,6 +73,24 @@ export default ({ status, index, onScrollToArtists }: {
             ? <SpectrumBars color={theme['c-primary-font']} />
             : <Icon name="play-outline" size={16} color={theme['c-350']} />
         }
+        {active && !loading ? (
+          <TouchableOpacity
+            style={[styles.reshuffleBtn, { borderColor: theme['c-primary-font'] }]}
+            activeOpacity={0.75}
+            onPress={(e) => { e.stopPropagation?.(); handlePress() }}
+          >
+            <Icon name="list-random" size={11} color={theme['c-primary-font']} />
+            <Text size={11} color={theme['c-primary-font']}>{t('roaming_reshuffle')}</Text>
+          </TouchableOpacity>
+        ) : null}
+        <TouchableOpacity
+          style={styles.filterBtn}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          activeOpacity={0.7}
+          onPress={(e) => { e.stopPropagation?.(); onOpenFilter() }}
+        >
+          <Icon name="slider" size={15} color={active ? theme['c-primary-font'] : theme['c-350']} />
+        </TouchableOpacity>
       </View>
 
       <Text numberOfLines={1} size={16} style={styles.heroTitle} color={active ? theme['c-primary-font'] : theme['c-font']}>
@@ -102,6 +122,23 @@ const styles = createStyle({
   },
   heroTopRow: {
     flexDirection: 'row',
+    alignItems: 'center',
+  },
+  reshuffleBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: scaleSizeW(8),
+    paddingVertical: scaleSizeH(3),
+    marginLeft: scaleSizeW(6),
+  },
+  filterBtn: {
+    marginLeft: scaleSizeW(6),
+    width: 26,
+    height: 26,
+    justifyContent: 'center',
     alignItems: 'center',
   },
   heroIconWrap: {

@@ -103,7 +103,7 @@ const buildIndex = async(excluded: Set<string>): Promise<RoamingIndex> => {
     .map(([name, fps]) => ({ name, count: fps.length }))
     .filter(a => a.count > 0)
     .sort((a, b) => b.count - a.count)
-    .slice(0, 9)
+    .slice(0, 11)
 
   return {
     fingerprintToCoord,
@@ -132,7 +132,7 @@ const getTopArtists = (inverted: Map<string, string[]>): Array<{ name: string, c
     .map(([name, fps]) => ({ name, count: fps.length }))
     .filter(a => a.count > 0)
     .sort((a, b) => b.count - a.count)
-    .slice(0, 9)
+    .slice(0, 11)
 }
 
 const loadIndexCache = async(): Promise<RoamingIndex | null> => {

@@ -1,25 +1,28 @@
-import { useCallback, useState } from 'react'
-import { TouchableOpacity, View } from 'react-native'
+import { useCallback, useMemo, useState } from 'react'
+import { Image, TouchableOpacity, View } from 'react-native'
 
 import { Icon } from '@/components/common/Icon'
 import Text from '@/components/common/Text'
 import Loading from '@/components/common/Loading'
+import { defaultHeaders } from '@/components/common/Image'
 import { useTheme } from '@/store/theme/hook'
 import { useI18n } from '@/lang'
 import { createStyle, toast } from '@/utils/tools'
 import { scaleSizeH, scaleSizeW } from '@/utils/pixelRatio'
-import { refresh, startArtists, type RoamingIndex, type RoamingStatus } from '@/core/roaming'
+import { getMusicByCoord, refresh, startArtists, type RoamingIndex, type RoamingStatus } from '@/core/roaming'
 import SpectrumBars from './SpectrumBars'
 
 /**
  * 常听歌手墙（roaming-plan §3.4）
- * - Top 9 磁贴：点击单艺人起播；激活态高亮+频谱，再点换一批
- * - 第 10 格「一起听」：进入多选点亮态 → 浮出起播按钮（n=0 禁用）
+ * - Top 11 磁贴：点击单艺人起播；激活态高亮+频谱，再点换一批；有封面的歌手模糊垫底
+ * - 第 12 格「一起听」：进入多选点亮态 → 浮出起播按钮（n=0 禁用）
  * - 起播成功后退出点亮态；空态显示引导文案
  */
 const MULTI_RULE_MARK = ','
+/** 磁贴背景封面模糊半径（与 PageContent 背景同思路，小卡片用较小值） */
+const ARTIST_BG_BLUR = 10
 
-export default ({ status, index }: { status: RoamingStatus, index: RoamingIndex | null }) => {
+export default ({ status, index, onScrollToGenre }: { status: RoamingStatus, index: RoamingIndex | null, onScrollToGenre?: () => void }) => {
   const theme = useTheme()
   const t = useI18n()
   const [selectMode, setSelectMode] = useState(false)
@@ -27,6 +30,20 @@ export default ({ status, index }: { status: RoamingStatus, index: RoamingIndex 
   const [loadingName, setLoadingName] = useState<string | null>(null)
 
   const artists = index?.topArtists ?? []
+  // 歌手磁贴背景封面：取该歌手第一首歌的封面 URL（有则模糊垫底）
+  const covers = useMemo(() => {
+    const map = new Map<string, string>()
+    if (!index) return map
+    for (const artist of index.topArtists) {
+      const fp = index.artistInverted.get(artist.name)?.[0]
+      if (!fp) continue
+      const coord = index.fingerprintToCoord.get(fp)
+      if (!coord) continue
+      const pic = getMusicByCoord(coord)?.meta.picUrl
+      if (pic) map.set(artist.name, pic)
+    }
+    return map
+  }, [index])
   const multiActive = !!status.active && status.ruleKey?.startsWith('artist:') && status.ruleKey.includes(MULTI_RULE_MARK)
 
   const toggleSelect = (name: string) => {
@@ -91,12 +108,12 @@ export default ({ status, index }: { status: RoamingStatus, index: RoamingIndex 
     return (
       <View style={styles.section}>
         <SectionHeader count={0} />
-        <View style={styles.emptyBox}>
+        <TouchableOpacity style={styles.emptyBox} activeOpacity={0.75} onPress={() => { onScrollToGenre?.() }}>
           <Icon name="album" size={36} color={theme['c-350']} />
           <Text size={13} style={styles.emptyText} color={theme['c-font-label']}>
             {t('roaming_empty_local')}
           </Text>
-        </View>
+        </TouchableOpacity>
       </View>
     )
   }
@@ -122,6 +139,14 @@ export default ({ status, index }: { status: RoamingStatus, index: RoamingIndex 
               activeOpacity={0.75}
               onPress={() => { handleArtistPress(artist.name) }}
             >
+              {covers.get(artist.name) ? (
+                <Image
+                  source={{ uri: covers.get(artist.name)!, headers: defaultHeaders }}
+                  blurRadius={ARTIST_BG_BLUR}
+                  style={styles.tileCover}
+                  resizeMode="cover"
+                />
+              ) : null}
               <View style={styles.tileTopRow}>
                 <Text numberOfLines={1} size={13} style={styles.tileName} color={active ? theme['c-primary-font'] : theme['c-font']}>
                   {artist.name}
@@ -148,7 +173,7 @@ export default ({ status, index }: { status: RoamingStatus, index: RoamingIndex 
           )
         })}
 
-        {/* 第 10 格：一起听（多选混播入口） */}
+        {/* 第 12 格：一起听（多选混播入口） */}
         <TouchableOpacity
           style={[
             styles.tile,
@@ -251,6 +276,15 @@ const styles = createStyle({
     padding: scaleSizeW(10),
     minHeight: scaleSizeH(64),
     justifyContent: 'space-between',
+    overflow: 'hidden',
+  },
+  tileCover: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: 0,
+    opacity: 0.3,
   },
   tileTopRow: {
     flexDirection: 'row',

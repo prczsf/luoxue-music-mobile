@@ -15,11 +15,12 @@ import { LIST_IDS } from '@/config/constant'
 import { useExcludeLists, useIndexMeta, useRoamingStatus } from './state'
 import HeroCards from './HeroCards'
 import ArtistWall from './ArtistWall'
+import GenreWall from './GenreWall'
 import QueuePanel from './QueuePanel'
 
 /**
  * 随心漫游页面（roaming-plan §3.2）
- * - 纵向滚动：Hero（全部歌曲）→ 常听歌手墙（P1 不含风格墙）
+ * - 纵向滚动三区块：Hero（全部歌曲）→ 常听歌手墙 → 风格盲盒
  * - 右上角「选择歌单」：底部弹层多选，确认后持久化并重建索引
  * - 横屏且漫游中：右侧常驻播放列表栏（可折叠）；竖屏由播放栏按钮呼出弹层
  */
@@ -34,7 +35,7 @@ export default () => {
 
   const scrollRef = useRef<ScrollView>(null)
   const filterModalRef = useRef<ModalType>(null)
-  const artistsYRef = useRef(0)
+  const genreYRef = useRef(0)
   const [filterVisible, setFilterVisible] = useState(false)
   const [draft, setDraft] = useState<string[]>([])
   const [railOpen, setRailOpen] = useState(true)
@@ -60,11 +61,11 @@ export default () => {
     handleCloseFilter()
   }
 
-  const handleArtistsLayout = (e: LayoutChangeEvent) => {
-    artistsYRef.current = e.nativeEvent.layout.y
+  const handleGenreLayout = (e: LayoutChangeEvent) => {
+    genreYRef.current = e.nativeEvent.layout.y
   }
-  const scrollToArtists = () => {
-    scrollRef.current?.scrollTo({ y: artistsYRef.current, animated: true })
+  const scrollToGenre = () => {
+    scrollRef.current?.scrollTo({ y: genreYRef.current, animated: true })
   }
 
   const showRail = isHorizontal && status.active && railOpen
@@ -90,10 +91,13 @@ export default () => {
       <View style={styles.body}>
         <ScrollView ref={scrollRef} style={styles.scroll} contentContainerStyle={styles.scrollContent}>
           <View style={styles.heroSection}>
-            <HeroCards status={status} index={index} onScrollToArtists={scrollToArtists} />
+            <HeroCards status={status} index={index} onScrollToGenre={scrollToGenre} onOpenFilter={handleOpenFilter} />
           </View>
-          <View onLayout={handleArtistsLayout}>
-            <ArtistWall status={status} index={index} />
+          <View>
+            <ArtistWall status={status} index={index} onScrollToGenre={scrollToGenre} />
+          </View>
+          <View onLayout={handleGenreLayout}>
+            <GenreWall status={status} />
           </View>
         </ScrollView>
 
