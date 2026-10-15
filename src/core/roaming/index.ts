@@ -1,9 +1,22 @@
 import { createLibrarySampler, createArtistSampler } from './samplers/library'
 import { createGenreSampler, GENRE_PRESETS, type GenrePreset } from './samplers/genre'
+import {
+  createHotMixSampler,
+  prewarmHotMix,
+  getHotMixRatio,
+  setHotMixRatio,
+  getHotMixPercent,
+  HOT_MIX_RATIOS,
+  type HotMixRatio,
+  type HotMixRatioOption,
+} from './samplers/hotMix'
 import * as conveyor from './conveyor'
 
 export { GENRE_PRESETS }
 export type { GenrePreset }
+
+export { prewarmHotMix, getHotMixRatio, setHotMixRatio, getHotMixPercent, HOT_MIX_RATIOS }
+export type { HotMixRatio, HotMixRatioOption }
 
 /**
  * 随心漫游对外门面（ADR 0003）
@@ -39,4 +52,10 @@ export const startGenre = async(genreId: string): Promise<boolean> => {
   if (!preset) return false
   const sampler = await createGenreSampler(preset)
   return conveyor.start(`genre:${genreId}`, global.i18n.t(preset.nameKey), sampler)
+}
+
+/** 熟歌热歌：常听老歌 + 榜单新歌按档位混播；榜单池不可用时纯本地降级 */
+export const startHotMix = async(): Promise<boolean> => {
+  const sampler = await createHotMixSampler()
+  return conveyor.start('hotmix', global.i18n.t('roaming_hero_hotmix'), sampler)
 }

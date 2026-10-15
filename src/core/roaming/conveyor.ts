@@ -13,6 +13,7 @@ import type { Sampler } from './samplers/library'
  * 履带队列引擎：把漫游歌单伪装成普通列表注入播放器（见 ADR 0003）
  * 契约：窗口 18、续杯水位 <5、续杯量 5、修剪阈值已播 >10、修剪量 5
  * 不变式：窗口永不含当前播放歌以外的已播段；当前歌永远在窗口内
+ * 去重：窗口内按指纹唯一——本地/在线同一首歌（不同 id）只保留一首
  */
 
 const WINDOW_SIZE = 18
@@ -43,6 +44,27 @@ export interface RoamingStatus {
 
 let session: RoamingSession | null = null
 let window_: LX.Music.MusicInfo[] = []
+/** 窗口内歌曲指纹集：本地/在线同一首歌视为同一首，防止重复入窗 */
+const windowFingerprints = new Set<string>()
+
+/** 按指纹去重（保留首次出现） */
+const dedupeByFingerprint = (list: LX.Music.MusicInfo[]): LX.Music.MusicInfo[] => {
+  const seen = new Set<string>()
+  const out: LX.Music.MusicInfo[] = []
+  for (const musicInfo of list) {
+    const fingerprint = getMusicFingerprint(musicInfo)
+    if (seen.has(fingerprint)) continue
+    seen.add(fingerprint)
+    out.push(musicInfo)
+  }
+  return out
+}
+
+/** 窗口结构变化后重算指纹集（窗口仅 20 余首，成本可忽略） */
+const syncWindowFingerprints = () => {
+  windowFingerprints.clear()
+  for (const musicInfo of window_) windowFingerprints.add(getMusicFingerprint(musicInfo))
+}
 
 const listeners = new Set<(status: RoamingStatus) => void>()
 
@@ -81,11 +103,18 @@ const backfill = async(count: number) => {
     for (let attempt = 0; attempt < 2 && list.length < count; attempt++) {
       const sampled = await session.sampler.refill(count - list.length)
       if (!sampled.length) break
-      const windowIds = new Set(window_.map(m => m.id))
-      list.push(...sampled.filter(m => !windowIds.has(m.id) && !list.some(n => n.id == m.id)))
+      // 指纹判重：窗口已有的、本批内重复的都不再入窗（本地/在线同曲不同 id 视为同一首）
+      const batchFingerprints = new Set<string>()
+      for (const musicInfo of sampled) {
+        const fingerprint = getMusicFingerprint(musicInfo)
+        if (batchFingerprints.has(fingerprint) || windowFingerprints.has(fingerprint)) continue
+        batchFingerprints.add(fingerprint)
+        list.push(musicInfo)
+      }
     }
     if (list.length) {
       arrPush(window_, list)
+      syncWindowFingerprints()
       notify()
     } else if (!session.refillFailed) {
       session.refillFailed = true
@@ -101,6 +130,7 @@ const trimIfNeeded = () => {
   if (playIndex <= TRIM_THRESHOLD) return
   if (window_.length <= TRIM_AMOUNT + 1) return
   window_.splice(0, TRIM_AMOUNT)
+  syncWindowFingerprints()
   // 按当前歌 id 在窗口内重算下标，避免手工减 N 的边界 bug
   updatePlayIndex()
 }
@@ -129,9 +159,10 @@ global.app_event.on('musicToggled', handleMusicToggled)
 export const start = async(ruleKey: string, sourceLabel: string, sampler: Sampler): Promise<boolean> => {
   stop()
   await lru.loadLru()
-  const list = await sampler.refill(WINDOW_SIZE)
+  const list = dedupeByFingerprint(await sampler.refill(WINDOW_SIZE))
   if (!list.length) return false
   window_ = list
+  syncWindowFingerprints()
   setMusicList(LIST_IDS.ROAMING, list)
   session = { ruleKey, sourceLabel, sampler, isRefilling: false, refillFailed: false }
   await playList(LIST_IDS.ROAMING, 0)
@@ -146,6 +177,7 @@ export const stop = () => {
   if (!session) return
   session = null
   window_ = []
+  windowFingerprints.clear()
   removeMusicList(LIST_IDS.ROAMING)
   notify()
 }
@@ -158,6 +190,7 @@ export const removeAt = (index: number): boolean => {
   const playIndex = getWindowPlayIndex()
   if (index == playIndex || index < 0 || index >= window_.length) return false
   window_.splice(index, 1)
+  syncWindowFingerprints()
   updatePlayIndex()
   void backfill(1)
   notify()

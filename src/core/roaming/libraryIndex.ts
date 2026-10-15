@@ -1,13 +1,14 @@
 import { LIST_IDS, storageDataPrefix } from '@/config/constant'
 import { getData, saveData } from '@/plugins/storage'
-import { allMusicList } from '@/utils/listManage'
+import { allMusicList, getListMusics, getUserLists } from '@/utils/listManage'
 
 /**
  * 本地曲库索引：指纹去重坐标池 + 歌手倒排表
  * 只存指纹与坐标，不复制 MusicInfo 对象；取歌时按坐标回查 allMusicList
  */
 
-const INDEX_SCHEMA_VERSION = 1
+// 2：修复「冷启动未打开歌单页，索引为空」导致的缓存需失效重建
+const INDEX_SCHEMA_VERSION = 2
 
 export interface SongCoord {
   listId: string
@@ -75,6 +76,24 @@ export const setExcludeLists = async(ids: string[]) => {
   await saveData(storageDataPrefix.roamingExcludeLists, ids)
 }
 
+/**
+ * 冷启动兜底：本地歌单的歌曲是懒加载的（平时只有「我的歌单」页会按需拉取），
+ * 用户不打开歌单页直接进漫游时 allMusicList 为空，索引构建与坐标回查都会取不到歌。
+ * 这里主动把参与漫游的歌单读进内存；已加载的歌单 getListMusics 直接返回，不再读库。
+ */
+const ensureLibraryLoaded = async(): Promise<void> => {
+  const excluded = new Set(await getExcludeLists())
+  const ids = [LIST_IDS.DEFAULT, LIST_IDS.LOVE, ...(await getUserLists()).map(list => list.id)]
+  await Promise.all(ids.map(async(id) => {
+    if (excluded.has(id)) return
+    try {
+      await getListMusics(id)
+    } catch {
+      // 单个歌单读库失败不影响其它歌单，漫游按空库降级
+    }
+  }))
+}
+
 let index: RoamingIndex | null = null
 let buildingPromise: Promise<RoamingIndex> | null = null
 
@@ -138,6 +157,8 @@ const getTopArtists = (inverted: Map<string, string[]>): Array<{ name: string, c
 const loadIndexCache = async(): Promise<RoamingIndex | null> => {
   const data = await getData<SerializedIndex>(storageDataPrefix.roamingIndexCache)
   if (!data || data.v != INDEX_SCHEMA_VERSION) return null
+  // 空索引视为无效缓存：可能是「本地歌单尚未加载」时构建的（冷启动直奔漫游页）
+  if (!data.totalSongs) return null
   const artistInverted = new Map(data.artists)
   return {
     fingerprintToCoord: new Map(data.entries),
@@ -157,6 +178,7 @@ export const getRoamingIndex = async(isDirty = false): Promise<RoamingIndex> => 
   if (cached && !isDirty) return Promise.resolve(cached)
   if (!buildingPromise) {
     buildingPromise = (async() => {
+      await ensureLibraryLoaded()
       let idx = cached ?? await loadIndexCache()
       if (isDirty || !idx) {
         const excluded = new Set(await getExcludeLists())

@@ -600,6 +600,12 @@
   "roaming_filter_sheet_title": "不參與漫遊的歌單",
   "roaming_filter_count": "{num} 個歌單不參與漫遊",
   "roaming_reshuffle": "重新洗牌",
+  "roaming_hero_hotmix": "熟歌熱歌",
+  "roaming_hotmix_desc": "{local}% 常聽的老歌 + {hot}% 榜單新歌",
+  "roaming_hotmix_conservative": "保守",
+  "roaming_hotmix_balanced": "均衡",
+  "roaming_hotmix_explore": "探索",
+  "roaming_artist_search_failed": "連網找歌沒成功，繼續播已有的歌",
   "roaming_queue_title": "播放清單 · {index}/{total}",
   "roaming_source_label": "漫遊 · {name}"
 }

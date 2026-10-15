@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { ScrollView, TouchableOpacity, View, type LayoutChangeEvent } from 'react-native'
 
 import { Icon } from '@/components/common/Icon'
@@ -12,6 +12,7 @@ import { createStyle } from '@/utils/tools'
 import { scaleSizeH, scaleSizeW } from '@/utils/pixelRatio'
 import { BorderWidths } from '@/theme'
 import { LIST_IDS } from '@/config/constant'
+import { prewarmHotMix } from '@/core/roaming'
 import { useExcludeLists, useIndexMeta, useRoamingStatus } from './state'
 import HeroCards from './HeroCards'
 import ArtistWall from './ArtistWall'
@@ -20,7 +21,7 @@ import QueuePanel from './QueuePanel'
 
 /**
  * 随心漫游页面（roaming-plan §3.2）
- * - 纵向滚动三区块：Hero（全部歌曲）→ 常听歌手墙 → 风格盲盒
+ * - 纵向滚动三区块：Hero（全部歌曲 + 熟歌热歌）→ 常听歌手墙 → 风格盲盒
  * - 右上角「选择歌单」：底部弹层多选，确认后持久化并重建索引
  * - 横屏且漫游中：右侧常驻播放列表栏（可折叠）；竖屏由播放栏按钮呼出弹层
  */
@@ -39,6 +40,9 @@ export default () => {
   const [filterVisible, setFilterVisible] = useState(false)
   const [draft, setDraft] = useState<string[]>([])
   const [railOpen, setRailOpen] = useState(true)
+
+  // 进页面后台预取榜单池（熟歌热歌用）：失败静默，不阻塞渲染
+  useEffect(() => { void prewarmHotMix() }, [])
 
   const listOptions = allList.filter(l => l.id != LIST_IDS.TEMP)
 

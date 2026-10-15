@@ -1,6 +1,6 @@
 # 随心漫游（Roaming）实施计划
 
-架构决策见 [ADR 0003](adr/0003-roaming-virtual-list-injection.md)；领域词汇见 [CONTEXT.md](../CONTEXT.md)。本文是工程实施的唯一计划载体，含模块规格、算法细节、分期与验收。
+架构决策见 [ADR 0003](adr/0003-roaming-virtual-list-injection.md)；领域词汇见 [CONTEXT.md](../CONTEXT.md)。本文是工程实施的唯一计划载体，含模块规格、算法细节、分期与验收。P2 逐任务进度追踪见 [roaming-p2-progress.md](roaming-p2-progress.md)。
 
 ## 0. 范围与分期
 
@@ -13,23 +13,23 @@
 
 ```
 src/core/roaming/
-├── index.ts            # 对外门面：start(ruleKey) / stop() / 状态订阅
+├── index.ts            # 对外门面：startXxx / stop() / 状态订阅
 ├── libraryIndex.ts     # 全库指纹去重池 + 歌手倒排表 + 软缓存
 ├── conveyor.ts         # 履带队列引擎（窗口注入/续杯/修剪/剔除补位）
 ├── lruStore.ts         # 防复读窗口（持久化 FIFO，写节流）
+├── useRoamingStatus.ts # 漫游状态的 React 订阅 hook
 └── samplers/
-    ├── index.ts        # Sampler 接口：refill(count): Promise<MusicInfo[]>
-    ├── library.ts      # P1 全库
-    ├── artist.ts       # P1 艺人（多选=多坐标合并）
+    ├── library.ts      # Sampler 接口 + Fisher-Yates 洗牌 + 全库/艺人抽样器（多选=多坐标合并）
     ├── genre.ts        # P2 风格盲盒（含真随机，Tag 置随机）
     └── hotMix.ts       # P2 熟歌热歌
 
 src/screens/Home/Views/Roaming/
 ├── index.tsx           # 页面容器 + 排除歌单弹层 + 空态引导
 ├── HeroCards.tsx       # 全库漫游 Hero；熟歌热歌 Hero（P2）
-├── ArtistWall.tsx      # Top 9 + 多选混播格，内联点亮模式
+├── ArtistWall.tsx      # Top 11 + 「一起听」格，内联点亮模式
 ├── GenreWall.tsx       # P2 风格色块墙
 ├── QueuePanel.tsx      # 队列面板（竖屏弹层 / 横屏侧栏共用内容组件）
+├── SpectrumBars.tsx    # 激活态频谱小动画
 └── state.ts            # 页面态：激活规则、多选态、索引元数据订阅
 
 docs/adr/0003-roaming-virtual-list-injection.md
@@ -184,7 +184,6 @@ i18n 的 key 用技术词没关系，用户永远看不到 key。
 - 点击 = 单艺人起播；激活态同 Hero（高亮+频谱，再点换一批）。
 - 多选混播入口（文案"一起听"）：点击第 12 格 → 前 11 格右上角出现勾选态 → 连点点亮 → 浮出"一起听 (n)"按钮（n=0 时禁用）；起播后退出点亮态。
 
-### 3.5 QueuePanel（P1）
 ### 3.5 播放列表弹层（QueuePanel，P1）
 - 竖屏：播放栏列表按钮呼出底部弹层；横屏：右侧常驻栏；内容组件共用。
 - 弹层标题：`播放列表 · 3/18`（当前第几首/共几首）；结构自上而下：**"结束漫游"按钮**（Q19）→ "最近听过"区（置灰，已播段，最多 10 条）→ 当前播放（高亮）→ "接下来播放"区（剩余段）。
@@ -242,7 +241,7 @@ i18n 的 key 用技术词没关系，用户永远看不到 key。
 3. 队列弹层：已播置灰可回溯、当前高亮、"不想听"剔除后自动补位、"结束漫游"生效。
 4. 回归：退出漫游后，普通列表的随机/列表循环/顺序/单曲循环、稍后播放优先级、上一首回溯全部行为不变。
 5. 空态：本地总歌 <5 时 Hero/艺人墙引导文案生效。
-- 6. 三语文案无裸 key；全 UI 无 emoji；文案走查：按 §3.0 对照表逐条检查用户可见字符串，无技术黑话（曲库/索引/缓存/去重/队列/LRU 等一律不出现）。
+6. 三语文案无裸 key；全 UI 无 emoji；文案走查：按 §3.0 对照表逐条检查用户可见字符串，无技术黑话（曲库/索引/缓存/去重/队列/LRU 等一律不出现）。
 
 ### P2（P1 通过后细化）
 

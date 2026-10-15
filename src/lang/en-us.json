@@ -600,6 +600,12 @@
   "roaming_filter_sheet_title": "Playlists excluded from roaming",
   "roaming_filter_count": "{num} playlists excluded",
   "roaming_reshuffle": "Reshuffle",
+  "roaming_hero_hotmix": "Familiar Hits",
+  "roaming_hotmix_desc": "{local}% familiar songs + {hot}% chart hits",
+  "roaming_hotmix_conservative": "Steady",
+  "roaming_hotmix_balanced": "Balanced",
+  "roaming_hotmix_explore": "Explore",
+  "roaming_artist_search_failed": "Couldn't find more songs online — keeping what we have",
   "roaming_queue_title": "Up Next · {index}/{total}",
   "roaming_source_label": "Roaming · {name}"
 }
