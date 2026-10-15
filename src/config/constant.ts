@@ -110,8 +110,8 @@ export const NAV_MENUS = [
   { id: 'nav_top', icon: 'leaderboard' },
   { id: 'nav_love', icon: 'menu' },
   { id: 'nav_roaming', icon: 'list-random' },
-  { id: 'nav_setting', icon: 'setting' },
   { id: 'nav_download', icon: 'download-2' },
+  { id: 'nav_setting', icon: 'setting' },
 ] as const
 
 export type NAV_ID_Type = typeof NAV_MENUS[number]['id']
@@ -155,7 +155,7 @@ export const DEFAULT_SETTING = {
   },
 
   viewPrevState: {
-    id: 'nav_search' as NAV_ID_Type,
+    id: 'nav_roaming' as NAV_ID_Type,
     // query: {},
   },
 }

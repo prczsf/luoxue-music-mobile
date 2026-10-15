@@ -254,8 +254,8 @@ const viewMap = {
   nav_top: 2,
   nav_love: 3,
   nav_roaming: 4,
-  nav_setting: 5,
-  nav_download: 6,
+  nav_download: 5,
+  nav_setting: 6,
 }
 const indexMap = [
   'nav_search',
@@ -263,8 +263,8 @@ const indexMap = [
   'nav_top',
   'nav_love',
   'nav_roaming',
-  'nav_setting',
   'nav_download',
+  'nav_setting',
 ] as const
 
 const Main = () => {
@@ -363,11 +363,11 @@ const Main = () => {
       <View collapsable={false} key="nav_roaming" style={styles.pageStyle}>
         <RoamingPage />
       </View>
-      <View collapsable={false} key="nav_setting" style={styles.pageStyle}>
-        <SettingPage />
-      </View>
       <View collapsable={false} key="nav_download" style={styles.pageStyle}>
         <DownloadPage />
+      </View>
+      <View collapsable={false} key="nav_setting" style={styles.pageStyle}>
+        <SettingPage />
       </View>
       {/* <View collapsable={false} key="nav_search" style={styles.pageStyle}>
         <Search />
