@@ -10,6 +10,7 @@ import MultipleModeBar, { type MultipleModeBarType, type SelectMode } from './Mu
 import { clearMusicUrl, handleDislikeMusic, handlePlay, handlePlayLater, handleShare, handleShowMusicSourceDetail } from './listAction'
 import { createStyle, checkStoragePermissions, requestStoragePermission, toast } from '@/utils/tools'
 import { downloadMusicFile, getDownloadDir } from '@/core/downloadMusic'
+import { startBatchDownload } from '@/core/download'
 import settingState from '@/store/setting/state'
 
 export interface OnlineListProps {
@@ -89,11 +90,13 @@ export default forwardRef<OnlineListType, OnlineListProps>(({
         toast(global.i18n.t('storage_permission_tip_disagree'), 'long')
         return
       }
-      const dir = await getDownloadDir()
       const list = info.selectedList.length ? info.selectedList : [info.musicInfo]
-      for (const item of list) {
-        void downloadMusicFile(item, dir, quality)
+      if (list.length > 1) {
+        void startBatchDownload(list, quality)
+        return
       }
+      const dir = await getDownloadDir()
+      void downloadMusicFile(list[0], dir, quality)
     })()
   }, [])
 

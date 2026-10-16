@@ -73,6 +73,15 @@ const defaultSetting: LX.AppSetting = {
   'download.savePath': '',
   'download.quality': '128k',
   'download.askQuality': false,
+  'download.embedPic': false,
+  'download.embedLyric': false,
+  'download.embedTlrc': false,
+  'download.embedRlrc': false,
+  'download.embedAwlrc': false,
+  'download.saveLrcFile': false,
+  'download.savePicFile': false,
+  'download.concurrency': 3,
+  'download.autoToggleSource': true,
 
   'sync.enable': false,
 

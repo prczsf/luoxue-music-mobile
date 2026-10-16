@@ -5,6 +5,7 @@ import initI18n from './i18n'
 import initUserApi from './userApi'
 import initPlayer from './player'
 import dataInit from './dataInit'
+import { restoreTasks } from '@/core/download'
 import initSync from './sync'
 import initCommonState from './common'
 import { initDeeplink } from './deeplink'
@@ -57,6 +58,8 @@ export default async() => {
   bootLog('Player inited.')
   await dataInit(setting)
   bootLog('Data inited.')
+  void restoreTasks()
+  bootLog('Download tasks restored.')
   await initCommonState(setting)
   bootLog('Common State inited.')
 

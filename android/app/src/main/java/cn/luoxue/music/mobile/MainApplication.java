@@ -11,6 +11,7 @@ import java.util.List;
 
 import cn.luoxue.music.mobile.cache.CachePackage;
 import cn.luoxue.music.mobile.crypto.CryptoPackage;
+import cn.luoxue.music.mobile.image.ImageCompressPackage;
 import cn.luoxue.music.mobile.lyric.LyricPackage;
 import cn.luoxue.music.mobile.userApi.UserApiPackage;
 import cn.luoxue.music.mobile.utils.UtilsPackage;
@@ -35,6 +36,7 @@ public class MainApplication extends NavigationApplication {
           packages.add(new UtilsPackage());
           packages.add(new CryptoPackage());
           packages.add(new UserApiPackage());
+          packages.add(new ImageCompressPackage());
           return packages;
         }
 

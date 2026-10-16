@@ -372,6 +372,51 @@ declare global {
       'download.askQuality': boolean
 
       /**
+       * 是否内嵌封面
+       */
+      'download.embedPic': boolean
+
+      /**
+       * 是否内嵌歌词（主开关，关闭时下方三项不生效）
+       */
+      'download.embedLyric': boolean
+
+      /**
+       * 同时内嵌翻译歌词
+       */
+      'download.embedTlrc': boolean
+
+      /**
+       * 同时内嵌罗马音歌词
+       */
+      'download.embedRlrc': boolean
+
+      /**
+       * 同时内嵌 LX 逐字歌词
+       */
+      'download.embedAwlrc': boolean
+
+      /**
+       * 同时保存独立歌词文件（.lrc）
+       */
+      'download.saveLrcFile': boolean
+
+      /**
+       * 同时保存独立封面图片（.jpg）
+       */
+      'download.savePicFile': boolean
+
+      /**
+       * 同时下载数上限（1~6）
+       */
+      'download.concurrency': number
+
+      /**
+       * 下载失败时自动切换音源（含音质阶梯降级与跨源兜底）
+       */
+      'download.autoToggleSource': boolean
+
+      /**
        * 是否启用同步
        */
       'sync.enable': boolean

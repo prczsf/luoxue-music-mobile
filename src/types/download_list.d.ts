@@ -12,7 +12,7 @@ declare namespace LX {
     | 'error'
     | 'completed'
 
-    type FileExt = 'mp3' | 'flac' | 'wav' | 'ape'
+    type FileExt = 'mp3' | 'flac' | 'wav' | 'ape' | 'ogg' | 'm4a'
 
     interface ProgressInfo {
       progress: number
@@ -55,6 +55,10 @@ declare namespace LX {
         ext: FileExt
         fileName: string
         filePath: string
+        /** 入队时的目标目录；恢复时不持久化，改用当前设置目录 */
+        dirPath?: string
+        /** 用户请求的音质，用于重试时复用 */
+        requestedQuality?: LX.Quality
       }
     }
 

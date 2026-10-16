@@ -590,3 +590,9 @@ export const setUserApiAllowShowUpdateAlert = async(id: string, enable: boolean)
   targetApi.allowShowUpdateAlert = enable
   await saveData(userApiPrefix, userApis)
 }
+
+const downloadTaskKey = storageDataPrefix.downloadTask
+
+/** 读取本地持久化的下载任务（仅 waiting/run/error，不含已完成） */
+export const getDownloadTasks = async(): Promise<LX.Download.ListItem[]> => (await getData<LX.Download.ListItem[]>(downloadTaskKey)) ?? []
+export const saveDownloadTasks = async(list: LX.Download.ListItem[]) => saveData(downloadTaskKey, list)

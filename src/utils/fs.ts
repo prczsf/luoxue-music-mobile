@@ -53,6 +53,12 @@ export const unGzipString = async(data: string, encoding?: Encoding) => FileSyst
 
 export const existsFile = async(path: string) => FileSystem.exists(path)
 
+/** 通知系统媒体库扫描该文件（仅 Android），使新写入的文件对其它应用可见 */
+export const scanFile = async(path: string) => RNFS.scanFile(path)
+
+/** 以 base64 读出文件指定位置的字节片段，用于识别音频容器类型 */
+export const readFileSlice = async(path: string, length: number, position: number) => RNFS.read(path, length, position, 'base64')
+
 export const rename = async(path: string, name: string) => FileSystem.rename(path, name)
 
 export const writeFile = async(path: string, data: string, encoding?: Encoding) => FileSystem.writeFile(path, data, encoding)

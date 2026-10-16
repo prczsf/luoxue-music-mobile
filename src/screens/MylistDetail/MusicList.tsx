@@ -17,6 +17,7 @@ import MetadataEditModal, { type MetadataEditType, type MetadataEditProps } from
 import MusicToggleModal, { type MusicToggleModalType } from '../Home/Views/Mylist/MusicList/MusicToggleModal'
 import DownloadQualityModal, { type DownloadQualityModalType } from '../Home/Views/Mylist/MusicList/DownloadQualityModal'
 import { getDownloadDir } from '@/core/downloadPath'
+import { startBatchDownload } from '@/core/download'
 import settingState from '@/store/setting/state'
 import { getListMusicSync } from '@/utils/listManage'
 import { getListMusics } from '@/core/list'
@@ -169,11 +170,13 @@ export default ({ listId }: { listId: string }) => {
         return
       }
       selectedInfoRef.current = info
-      const dir = await getDownloadDir()
       const list = info.selectedList.length ? info.selectedList : [info.musicInfo]
-      for (const item of list) {
-        void downloadMusicFile(item, dir, quality)
+      if (list.length > 1) {
+        void startBatchDownload(list, quality)
+        return
       }
+      const dir = await getDownloadDir()
+      void downloadMusicFile(list[0], dir, quality)
     })()
   }, [])
   const handleDownload = useCallback((info: SelectInfo) => {
