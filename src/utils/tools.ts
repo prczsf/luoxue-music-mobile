@@ -137,8 +137,17 @@ export const toast = (message: string, duration: 'long' | 'short' = 'short', pos
 
 export const openUrl = async(url: string): Promise<void> => Linking.canOpenURL(url).then(async() => Linking.openURL(url))
 
+/**
+ * 判断当前音源能否为指定平台提供播放地址
+ *
+ * 旧实现只看 qualityList（音源声明的音质），脚本没声明音质时整条源会被判成不可用，
+ * 但「没声明音质」不等于「拿不到地址」，这里以是否实现了取地址为准，音质声明只作补充
+ */
 export const assertApiSupport = (source: LX.Source): boolean => {
-  return source == 'local' || global.lx.qualityList[source] != null
+  if (source == 'local') return true
+  // 运行时这里放的是音源脚本构建出来的取址对象，与 LX.UserApi.UserApiSources 的声明形状不同
+  const provider = global.lx.apis[source] as unknown as { getMusicUrl?: unknown } | undefined
+  return provider?.getMusicUrl != null || global.lx.qualityList[source] != null
 }
 
 // const handleRemoveDataMultiple = async keys => {
