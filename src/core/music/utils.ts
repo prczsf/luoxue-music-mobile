@@ -56,7 +56,8 @@ export const getOtherSource = async(musicInfo: LX.Music.MusicInfo | LX.Download.
   const promise = new Promise<LX.Music.MusicInfoOnline[]>((resolve, reject) => {
     let timeout: null | number = BackgroundTimer.setTimeout(() => {
       timeout = null
-      reject(new Error('find music timeout'))
+      // 统一用超时文案，让 urlError.ts 能把它归为临时故障：搜源慢不等于这首歌不可播放
+      reject(new Error(requestMsg.timeout))
     }, 12_000)
     findMusic(searchMusicInfo).then((otherSource) => {
       if (otherSourceCache.size > 10) otherSourceCache.clear()
@@ -161,8 +162,8 @@ export const getOnlineOtherSourceMusicUrlByLocal = async(musicInfo: LX.Music.Mus
 
   const quality = '128k'
 
-  const cachedUrl = await getStoreMusicUrl(musicInfo, quality)
-  if (cachedUrl && !isRefresh) return { url: cachedUrl, quality, isFromCache: true }
+  const cachedItem = await getStoreMusicUrl(musicInfo, [quality])
+  if (cachedItem && !isRefresh) return { url: cachedItem.url, quality, isFromCache: true }
 
   let reqPromise
   try {
@@ -222,12 +223,48 @@ export const getPlayQuality = (highQuality: LX.Quality, musicInfo: LX.Music.Musi
 /** 换源阶段单首歌最多尝试的取地址请求数，避免音质阶梯把失败路径拖得过长 */
 const MAX_OTHER_SOURCE_ATTEMPTS = 6
 
-export const getOnlineOtherSourceMusicUrl = async({ musicInfos, quality, onToggleSource, isRefresh, retryedSource = [] }: {
+/** 单次取地址请求的等待上限。脚本请求自身要 20s 才超时，这里提前放弃，把"卡住"变成"失败" */
+const URL_REQUEST_TIMEOUT = 8000
+
+/** 一次取地址（含同源音质阶梯、跨源搜索、跨源重试）的总时间预算（ADR 0009 不变式③） */
+const URL_RESOLVE_BUDGET = 12_000
+
+/** 创建一个"剩余时间"取函数，用于在整条取地址链路上共享同一份时间预算 */
+const createRemainTime = (budget: number) => {
+  const end = Date.now() + budget
+  return () => end - Date.now()
+}
+
+/**
+ * 给取地址请求加等待上限。
+ *
+ * 超时按"请求超时"处理（属于临时故障，见 urlError.ts）：它只说明这次没拿到，
+ * 既不能据此判歌曲不可播放，也不该让它在音质阶梯里继续占着时间预算。
+ */
+const withTimeout = async<T>(promise: Promise<T>, timeout: number): Promise<T> => {
+  return new Promise<T>((resolve, reject) => {
+    let timeoutId: number | null = BackgroundTimer.setTimeout(() => {
+      timeoutId = null
+      reject(new Error(requestMsg.timeout))
+    }, Math.max(timeout, 1))
+    promise.then((result) => {
+      if (timeoutId) BackgroundTimer.clearTimeout(timeoutId)
+      resolve(result)
+    }).catch((err) => {
+      if (timeoutId) BackgroundTimer.clearTimeout(timeoutId)
+      reject(err)
+    })
+  })
+}
+
+export const getOnlineOtherSourceMusicUrl = async({ musicInfos, quality, onToggleSource, isRefresh, retryedSource = [], getRemainTime }: {
   musicInfos: LX.Music.MusicInfoOnline[]
   quality?: LX.Quality
   onToggleSource: (musicInfo?: LX.Music.MusicInfoOnline) => void
   isRefresh: boolean
   retryedSource?: LX.OnlineSource[]
+  /** 与调用方共享同一份取地址时间预算；不传则本次调用自己开一份 */
+  getRemainTime?: () => number
 }): Promise<{
   url: string
   musicInfo: LX.Music.MusicInfoOnline
@@ -235,6 +272,8 @@ export const getOnlineOtherSourceMusicUrl = async({ musicInfos, quality, onToggl
   isFromCache: boolean
 }> => {
   if (!await global.lx.apiInitPromise[0]) throw new Error('source init failed')
+
+  const remainTime = getRemainTime ?? createRemainTime(URL_RESOLVE_BUDGET)
 
   let attempts = MAX_OTHER_SOURCE_ATTEMPTS
   let musicInfo: LX.Music.MusicInfoOnline | null = null
@@ -257,12 +296,17 @@ export const getOnlineOtherSourceMusicUrl = async({ musicInfos, quality, onToggl
     console.log('try toggle to: ', musicInfo.source, musicInfo.name, musicInfo.singer, musicInfo.interval)
     onToggleSource(musicInfo)
 
-    // 缓存只用于首选音质（与旧实现一致）；降级档位一律取新地址，避免拿过期链接兜底
-    const cachedUrl = await getStoreMusicUrl(musicInfo, targetQualitys[0])
-    if (cachedUrl && !isRefresh) return { url: cachedUrl, musicInfo, quality: targetQualitys[0], isFromCache: true }
+    // 缓存按音质阶梯顺序读：跨源候选同样不该因为音质档位不同而白白重取一次
+    if (!isRefresh) {
+      const cachedItem = await getStoreMusicUrl(musicInfo, targetQualitys)
+      if (cachedItem) return { url: cachedItem.url, musicInfo, quality: cachedItem.quality, isFromCache: true }
+    }
 
     for (const itemQuality of targetQualitys) {
       if (attempts-- <= 0) break
+      const remain = remainTime()
+      // 预算耗尽就不再往下试：换源是为了尽量播出来，但不能无上限地拖时间
+      if (remain <= 0) throw new Error(requestMsg.timeout)
       let reqPromise
       try {
         reqPromise = musicSdk[musicInfo.source].getMusicUrl(toOldMusicInfo(musicInfo), itemQuality).promise
@@ -270,7 +314,7 @@ export const getOnlineOtherSourceMusicUrl = async({ musicInfos, quality, onToggl
         reqPromise = Promise.reject(err)
       }
       try {
-        const { url, type } = await reqPromise as { url: string, type: LX.Quality }
+        const { url, type } = await withTimeout(reqPromise as Promise<{ url: string, type: LX.Quality }>, Math.min(remain, URL_REQUEST_TIMEOUT))
         return { musicInfo, url, quality: type, isFromCache: false }
       } catch (err: any) {
         if (err.message == requestMsg.tooManyRequests) throw err
@@ -304,13 +348,21 @@ export const handleGetOnlineMusicUrl = async({ musicInfo, quality, onToggleSourc
   // 而跨源重搜既慢，又要求别的平台刚好能搜到同一首
   const targetQualitys = quality ? [quality] : getTryQualitys(settingState.setting['player.playQuality'], musicInfo, global.lx.qualityList)
 
-  // 缓存只用于首选音质（与旧实现一致）；降级档位一律取新地址，避免拿过期链接兜底
-  const firstQuality = targetQualitys[0]
-  const cachedUrl = await getStoreMusicUrl(musicInfo, firstQuality)
-  if (cachedUrl && !isRefresh) return { musicInfo, url: cachedUrl, quality: firstQuality, isFromCache: true }
+  // 缓存按音质阶梯顺序读（ADR 0009 不变式②）：命中的档位正是上次降级才拿到的地址
+  if (!isRefresh) {
+    const cachedItem = await getStoreMusicUrl(musicInfo, targetQualitys)
+    if (cachedItem) return { musicInfo, url: cachedItem.url, quality: cachedItem.quality, isFromCache: true }
+  }
 
+  const remainTime = createRemainTime(URL_RESOLVE_BUDGET)
   let lastError: any = null
   for (const targetQuality of targetQualitys) {
+    const remain = remainTime()
+    // 预算耗尽就直接结束本次取址：把"无限等待"变成"可预期的失败"（ADR 0009 不变式③）
+    if (remain <= 0) {
+      lastError = new Error(requestMsg.timeout)
+      break
+    }
     let reqPromise
     try {
       reqPromise = musicSdk[musicInfo.source].getMusicUrl(toOldMusicInfo(musicInfo), targetQuality).promise
@@ -318,7 +370,7 @@ export const handleGetOnlineMusicUrl = async({ musicInfo, quality, onToggleSourc
       reqPromise = Promise.reject(err)
     }
     try {
-      const { url, type } = await reqPromise as { url: string, type: LX.Quality }
+      const { url, type } = await withTimeout(reqPromise as Promise<{ url: string, type: LX.Quality }>, Math.min(remain, URL_REQUEST_TIMEOUT))
       return { musicInfo, url, quality: type, isFromCache: false }
     } catch (err: any) {
       if (err.message == requestMsg.tooManyRequests) throw err
@@ -330,7 +382,9 @@ export const handleGetOnlineMusicUrl = async({ musicInfo, quality, onToggleSourc
   if (!allowToggleSource) throw lastError ?? new Error('failed')
 
   onToggleSource()
-  const otherSource = await getOtherSource(musicInfo)
+  const searchRemain = remainTime()
+  if (searchRemain <= 0) throw lastError ?? new Error(requestMsg.timeout)
+  const otherSource = await withTimeout(getOtherSource(musicInfo), searchRemain)
   // console.log('find otherSource', otherSource.length)
   if (!otherSource.length) throw lastError ?? new Error('failed')
 
@@ -340,6 +394,8 @@ export const handleGetOnlineMusicUrl = async({ musicInfo, quality, onToggleSourc
     quality,
     isRefresh,
     retryedSource: [musicInfo.source],
+    // 跨源阶段继续用同一份预算，避免"同源慢 + 跨源慢"串联后翻倍
+    getRemainTime: remainTime,
   })
 }
 

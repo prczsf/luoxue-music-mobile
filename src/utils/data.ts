@@ -1,6 +1,7 @@
 import { getData, saveData, getAllKeys, removeDataMultiple, saveDataMultiple, removeData, getDataMultiple } from '@/plugins/storage'
 import { DEFAULT_SETTING, LIST_IDS, storageDataPrefix, type NAV_ID_Type } from '@/config/constant'
 import { throttle } from './common'
+import { MUSIC_URL_FRESH_TIME, pickFreshMusicUrl, toMusicUrlCacheItem, type MusicUrlCacheItem } from '@/core/music/urlCache'
 // import { gzip, ungzip } from '@/utils/nativeModules/gzip'
 // import { readFile, writeFile, temporaryDirectoryPath, unlink } from '@/utils/fs'
 // import { isNotificationsEnabled, openNotificationPermissionActivity, shareText } from '@/utils/nativeModules/utils'
@@ -340,16 +341,31 @@ export const removeListMusics = async(ids: string[]): Promise<void> => {
 }
 
 export const qualitys = ['128k', '320k', 'flac', 'flac24bit']
+
+const getMusicUrlKey = (musicInfo: LX.Music.MusicInfo, quality: LX.Quality) => `${storageDataPrefix.musicUrl}${musicInfo.id}_${quality}`
+
+/**
+ * 按给定音质顺序读 URL 缓存，返回第一个仍在新鲜期内的结果。
+ * 新鲜期判断与"音质阶梯回退"的规则在 core/music/urlCache.ts，便于单独断言（ADR 0009）
+ */
+export const getMusicUrl = async(musicInfo: LX.Music.MusicInfo, qualitys: readonly LX.Quality[], maxAge = MUSIC_URL_FRESH_TIME): Promise<MusicUrlCacheItem | null> => {
+  if (!qualitys.length) return null
+  const datas = await getDataMultiple(qualitys.map(quality => getMusicUrlKey(musicInfo, quality)))
+  return pickFreshMusicUrl({ datas: datas.map(([, value]) => value), qualitys, maxAge })
+}
+
 export const hasMusicUrlByMusic = async(musicInfo: LX.Music.MusicInfo) => {
-  return getDataMultiple(qualitys.map(q => `${storageDataPrefix.musicUrl}${musicInfo.id}_${q}`)).then((urls) => {
-    return urls.some(([, url]) => !!url)
+  return getDataMultiple(qualitys.map(q => getMusicUrlKey(musicInfo, q as LX.Quality))).then((urls) => {
+    return urls.some(([, url]) => toMusicUrlCacheItem(url, '128k') != null)
   })
 }
 export const clearMusicUrlByMusic = async(musicInfo: LX.Music.MusicInfo) => {
-  await removeDataMultiple(qualitys.map(q => `${storageDataPrefix.musicUrl}${musicInfo.id}_${q}`))
+  await removeDataMultiple(qualitys.map(q => getMusicUrlKey(musicInfo, q as LX.Quality)))
 }
-export const getMusicUrl = async(musicInfo: LX.Music.MusicInfo, type: LX.Quality) => getData<string>(`${storageDataPrefix.musicUrl}${musicInfo.id}_${type}`).then((url) => url ?? '')
-export const saveMusicUrl = async(musicInfo: LX.Music.MusicInfo, type: LX.Quality, url: string) => saveData(`${storageDataPrefix.musicUrl}${musicInfo.id}_${type}`, url)
+export const saveMusicUrl = async(musicInfo: LX.Music.MusicInfo, type: LX.Quality, url: string) => {
+  const item: MusicUrlCacheItem = { url, quality: type, time: Date.now() }
+  return saveData(getMusicUrlKey(musicInfo, type), item)
+}
 export const clearMusicUrl = async(keys?: string[]) => {
   if (!keys) keys = (await getAllKeys()).filter(key => key.startsWith(storageDataPrefix.musicUrl))
   await removeDataMultiple(keys)

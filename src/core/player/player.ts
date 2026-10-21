@@ -70,7 +70,8 @@ const createDelayNextTimeout = (delay: number) => {
     addDelayNextTimeout,
   }
 }
-const { addDelayNextTimeout, clearDelayNextTimeout } = createDelayNextTimeout(5000)
+// 取址失败后切下一首前的等待：只为让失败状态可见，不再白等 5s（ADR 0009 不变式④）
+const { addDelayNextTimeout, clearDelayNextTimeout } = createDelayNextTimeout(2000)
 const { addDelayNextTimeout: addLoadTimeout, clearDelayNextTimeout: clearLoadTimeout } = createDelayNextTimeout(100000)
 
 const createGettingUrlId = (musicInfo: LX.Music.MusicInfo | LX.Download.ListItem) => {
@@ -141,7 +142,11 @@ const getMusicPlayUrl = async(musicInfo: LX.Music.MusicInfo | LX.Download.ListIt
 
     if (err.message == requestMsg.tooManyRequests) return delayRetry(musicInfo, isRefresh)
 
-    if (!isRetryed) return getMusicPlayUrl(musicInfo, isRefresh, true)
+    // 只有"还没试遍所有音源"的失败才值得整链重跑一次：
+    // - 换源穷尽是确定性结论（isSourceExhaustedError），再跑一遍只会把失败路径翻倍
+    // - 取址预算耗尽（requestMsg.timeout）重跑会把 12s 预算变成 24s；而 withTimeout 无法取消
+    //   底层请求（用户脚本请求没有可用的 cancel），重跑多数只是把同一个慢请求再发一遍
+    if (!isRetryed && !isSourceExhaustedError(err) && err.message != requestMsg.timeout) return getMusicPlayUrl(musicInfo, isRefresh, true)
 
     throw err
   })

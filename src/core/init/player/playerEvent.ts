@@ -13,6 +13,14 @@ export default () => {
 
   let loadingTimeout: number | null = null
   let delayNextTimeout: number | null = null
+
+  /**
+   * 起播超时：音频流握手超过这个时间基本可判死链或严重丢包（移动端正常 1~3s 内起播）。
+   * 旧值 25s 会让一次失效地址白等半分钟，叠加二次超时能拖过 50s（ADR 0009 不变式④）
+   */
+  const LOADING_TIMEOUT = 8000
+  /** 播放失败后切下一首前的等待：只为让"失败"状态可见，不再是 5s 的长停顿 */
+  const DELAY_NEXT_TIMEOUT = 2000
   const startLoadingTimeout = () => {
     // console.log('start load timeout')
     clearLoadingTimeout()
@@ -31,7 +39,7 @@ export default () => {
         prevTimeoutId = playerState.musicInfo.id
         if (playerState.playMusicInfo.musicInfo) setMusicUrl(playerState.playMusicInfo.musicInfo, true)
       }
-    }, 25000)
+    }, LOADING_TIMEOUT)
   }
   const clearLoadingTimeout = () => {
     if (!loadingTimeout) return
@@ -54,7 +62,7 @@ export default () => {
         return
       }
       void playNext(true)
-    }, 5000)
+    }, DELAY_NEXT_TIMEOUT)
   }
 
   const handleLoadstart = () => {
@@ -90,7 +98,8 @@ export default () => {
     if (!playerState.musicInfo.id) return
     clearLoadingTimeout()
     if (global.lx.isPlayedStop) return
-    if (playerState.playMusicInfo.musicInfo && retryNum < 2) { // 若音频URL无效则尝试刷新2次URL
+    // URL 无效时只刷新一次：刷新本身就是重跑整条取址链，刷两次只会把失败路径再拉长一倍（ADR 0009 不变式④）
+    if (playerState.playMusicInfo.musicInfo && retryNum < 1) {
       let musicInfo = playerState.playMusicInfo.musicInfo
       void getPosition().then((position) => {
         if (position) setNowPlayTime(position)

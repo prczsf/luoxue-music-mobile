@@ -8,12 +8,12 @@ import settingState from '@/store/setting/state'
 
 import {
   buildLyricInfo,
-  getPlayQuality,
   handleGetOnlineLyricInfo,
   handleGetOnlineMusicUrl,
   handleGetOnlinePicUrl,
   getCachedLyricInfo,
 } from './utils'
+import { getTryQualitys } from './playQuality'
 
 /* export const setMusicUrl = ({ musicInfo, type, url }: {
   musicInfo: LX.Music.MusicInfo
@@ -52,9 +52,13 @@ export const getMusicUrl = async({ musicInfo, quality, isRefresh, allowToggleSou
 
   //   // return Promise.reject(new Error('该歌曲没有可播放的音频'))
   // }
-  const targetQuality = quality ?? getPlayQuality(settingState.setting['player.playQuality'], musicInfo)
-  const cachedUrl = await getStoreMusicUrl(musicInfo, targetQuality)
-  if (cachedUrl && !isRefresh) return cachedUrl
+  // 缓存按音质阶梯顺序读取：首选音质没命中时允许用更低档位的地址起播。
+  // 否则"降级后才拿到地址"的那次预取会在真正播放时彻底失效（ADR 0009 不变式②）
+  if (!isRefresh) {
+    const qualitys = quality ? [quality] : getTryQualitys(settingState.setting['player.playQuality'], musicInfo, global.lx.qualityList)
+    const cachedUrl = await getStoreMusicUrl(musicInfo, qualitys)
+    if (cachedUrl) return cachedUrl.url
+  }
 
   return handleGetOnlineMusicUrl({ musicInfo, quality, onToggleSource, isRefresh, allowToggleSource }).then(({ url, quality: targetQuality, musicInfo: targetMusicInfo, isFromCache }) => {
     if (targetMusicInfo.id != musicInfo.id && !isFromCache) void saveMusicUrl(targetMusicInfo, targetQuality, url)
