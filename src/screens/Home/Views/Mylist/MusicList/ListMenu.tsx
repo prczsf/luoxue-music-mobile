@@ -28,6 +28,7 @@ export interface ListMenuProps {
   onMusicSourceDetail: (selectInfo: SelectInfo) => void
   onRemoveCache: (selectInfo: SelectInfo) => void
   onDislikeMusic: (selectInfo: SelectInfo) => void
+  onBlockSinger: (selectInfo: SelectInfo) => void
   onRemove: (selectInfo: SelectInfo) => void
 }
 export interface ListMenuType {
@@ -86,6 +87,7 @@ export default forwardRef<ListMenuType, ListMenuProps>((props, ref) => {
       { action: 'removeCache', disabled: !has_url_cache, label: t('list_remove_cache') },
       // { action: 'musicSearch', label: t('music_search') },
       { action: 'dislike', disabled: hasDislike(musicInfo), label: t('dislike') },
+      { action: 'blockSinger', disabled: !musicInfo.singer, label: t('block_singer') },
       { action: 'remove', label: t('delete') },
     ].filter(m => !(isMultiSelect && m.action == 'remove'))
     if (isLocal) menu.splice(6, 0, { action: 'editMetadata', disabled: !edit_metadata, label: t('edit_metadata') })
@@ -161,6 +163,9 @@ export default forwardRef<ListMenuType, ListMenuProps>((props, ref) => {
         break
       case 'dislike':
         props.onDislikeMusic(selectInfo)
+        break
+      case 'blockSinger':
+        props.onBlockSinger(selectInfo)
         break
       case 'remove':
         props.onRemove(selectInfo)

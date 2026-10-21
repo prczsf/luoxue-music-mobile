@@ -25,6 +25,7 @@ export interface ListMenuProps {
   onMusicSourceDetail: (selectInfo: SelectInfo) => void
   onRemoveCache: (selectInfo: SelectInfo) => void
   onDislikeMusic: (selectInfo: SelectInfo) => void
+  onBlockSinger: (selectInfo: SelectInfo) => void
 }
 export interface ListMenuType {
   show: (selectInfo: SelectInfo, position: Position) => void
@@ -67,6 +68,7 @@ export default forwardRef<ListMenuType, ListMenuProps>((props: ListMenuProps, re
       { action: 'musicSourceDetail', label: t('music_source_detail') },
       { action: 'removeCache', disabled: !has_url_cache, label: t('list_remove_cache') },
       { action: 'dislike', label: t('dislike'), disabled: hasDislike(musicInfo) },
+      { action: 'blockSinger', disabled: !musicInfo.singer, label: t('block_singer') },
     ]
     setMenus(menu)
     void hasUrlCache(musicInfo).then((_has_url_cache) => {
@@ -111,6 +113,9 @@ export default forwardRef<ListMenuType, ListMenuProps>((props: ListMenuProps, re
         break
       case 'dislike':
         props.onDislikeMusic(selectInfo)
+        break
+      case 'blockSinger':
+        props.onBlockSinger(selectInfo)
         break
       default:
         break

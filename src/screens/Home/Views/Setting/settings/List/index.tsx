@@ -3,6 +3,7 @@ import { memo } from 'react'
 import Section from '../../components/Section'
 import AddMusicLocationType from './AddMusicLocationType'
 import IsClickPlayList from './IsClickPlayList'
+import PlayAllOnOpen from './PlayAllOnOpen'
 import IsShowAlbumName from './IsShowAlbumName'
 import IsShowInterval from './IsShowInterval'
 
@@ -17,6 +18,7 @@ export default memo(() => {
       <IsShowAlbumName />
       <IsShowInterval />
       <AddMusicLocationType />
+      <PlayAllOnOpen />
     </Section>
   )
 })

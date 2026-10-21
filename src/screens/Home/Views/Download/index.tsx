@@ -27,6 +27,9 @@ import { checkStoragePermissions, confirmDialog, createStyle, requestStoragePerm
 import { scaleSizeH, scaleSizeW } from '@/utils/pixelRatio'
 import { BorderWidths } from '@/theme'
 
+/** 下载完成后重新扫描的合并窗口：批量下载连续完成时只扫一次 */
+const DOWNLOAD_REFRESH_DELAY = 1000
+
 /**
  * 我的下载（Home 内页，与其它侧边栏项同一布局：共用 Home 顶部栏 / PlayerBar / 抽屉）
  * - 扫描下载目录音频文件：先按文件名秒级上屏，再异步补全 metadata
@@ -45,13 +48,19 @@ export default memo(() => {
   const [selectedMusic, setSelectedMusic] = useState<LX.Music.MusicInfoLocal | null>(null)
   const musicAddModalRef = useRef<MusicAddModalType>(null)
 
+  // 每次扫描的代次：并发扫描时旧结果不覆盖新结果
+  const scanIdRef = useRef(0)
+
   const loadDownloads = useCallback(async() => {
+    const scanId = ++scanIdRef.current
+    const isStale = () => scanIdRef.current != scanId
     setLoading(true)
     try {
       const hasPerm = await checkStoragePermissions()
       if (!hasPerm) {
         const granted = await requestStoragePermission()
         if (!granted) {
+          if (isStale()) return
           toast(t('storage_permission_tip_request'))
           setLoading(false)
           return
@@ -59,8 +68,10 @@ export default memo(() => {
       }
 
       const dir = await getDownloadDir()
+      if (isStale()) return
       setDownloadDir(dir)
       const files = await scanAudioFiles(dir)
+      if (isStale()) return
       if (!files.length) {
         setRawList([])
         setLoading(false)
@@ -83,16 +94,33 @@ export default memo(() => {
           } catch {
             enriched.push(buildLocalMusicInfoByFilePath(file))
           }
+          if (isStale()) return
         }
         setRawList(enriched)
       })()
     } catch {
-      setLoading(false)
+      if (!isStale()) setLoading(false)
     }
   }, [t])
 
+  // 首次挂载扫描；此后由数据层的 downloadListUpdate 事件触发重新扫描
+  // （页面常驻不卸载，只在挂载时扫一次会一直显示旧列表）
   useEffect(() => {
     void loadDownloads()
+    // 批量下载会连续完成多首，合并为一次重新扫描
+    let timer: ReturnType<typeof setTimeout> | null = null
+    const handleDownloadListUpdate = () => {
+      if (timer) clearTimeout(timer)
+      timer = setTimeout(() => {
+        timer = null
+        void loadDownloads()
+      }, DOWNLOAD_REFRESH_DELAY)
+    }
+    global.app_event.on('downloadListUpdate', handleDownloadListUpdate)
+    return () => {
+      if (timer) clearTimeout(timer)
+      global.app_event.off('downloadListUpdate', handleDownloadListUpdate)
+    }
   }, [loadDownloads])
 
   // 搜索过滤后的列表

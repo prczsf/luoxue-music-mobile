@@ -230,6 +230,9 @@ const startTask = (task: LX.Download.ListItem) => {
     task.statusText = global.i18n.t('list_download_success')
     event.updated()
     persistTasks()
+
+    // 下载完成：从数据层统一通知文件列表视图重新扫描（此前该事件只声明未广播）
+    global.app_event.downloadListUpdate()
     toast(`${global.i18n.t('list_download_success')}: ${task.metadata.musicInfo.name}`, 'long')
     startPending()
   }).catch((error: unknown) => {

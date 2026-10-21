@@ -213,6 +213,36 @@ export const confirmDialog = async({
   })
 }
 
+/**
+ * 多选一弹窗：返回被点击按钮的下标，取消/关闭返回 -1
+ * Android 最多显示三个按钮，调用方自行保证 buttons.length <= 3
+ */
+export const chooseDialog = async({
+  title = '',
+  message = '',
+  buttons,
+  bgClose = true,
+}: {
+  title?: string
+  message?: string
+  buttons: string[]
+  bgClose?: boolean
+}) => {
+  return new Promise<number>(resolve => {
+    Alert.alert(title, message, buttons.map((text, index) => ({
+      text,
+      onPress() {
+        resolve(index)
+      },
+    })), {
+      cancelable: bgClose,
+      onDismiss() {
+        resolve(-1)
+      },
+    })
+  })
+}
+
 export const tipDialog = async({
   title = '',
   message = '',

@@ -61,12 +61,13 @@ const defaultSetting: LX.AppSetting = {
   'search.isShowHotSearch': false,
   'search.isShowHistorySearch': false,
 
-  'list.isClickPlayList': false,
+  'list.isClickPlayList': true,
   'list.isShowSource': true,
   'list.isShowAlbumName': false,
   'list.isShowInterval': true,
   'list.isSaveScrollLocation': true,
   'list.addMusicLocationType': 'top',
+  'list.playAllOnOpen': 'off',
   'list.mylistViewMode': 'list',
 
   'download.fileName': '歌名 - 歌手',

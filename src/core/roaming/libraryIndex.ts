@@ -1,6 +1,7 @@
 import { LIST_IDS, storageDataPrefix } from '@/config/constant'
 import { getData, saveData } from '@/plugins/storage'
 import { allMusicList, getListMusics, getUserLists } from '@/utils/listManage'
+import { splitSingers } from '@/utils/singer'
 
 /**
  * 本地曲库索引：指纹去重坐标池 + 歌手倒排表
@@ -39,7 +40,6 @@ interface SerializedIndex {
   builtAt: number
 }
 
-const SINGER_SPLIT_RXP = /[/、&;;，,]/
 const FINGERPRINT_NORMALIZE_RXP = /[\s[\]【】()（）《》<>·・.。，,、!！?？'"`~@#$%^&*+=|\\/;；:：_—-]+/g
 
 /** 歌曲指纹：标准化歌名 + 歌手，本地/在线同一套算法 */
@@ -48,11 +48,6 @@ export const getFingerprint = (name: string, singer: string): string => {
 }
 
 export const getMusicFingerprint = (musicInfo: LX.Music.MusicInfo): string => getFingerprint(musicInfo.name, musicInfo.singer)
-
-/** 拆分歌手字段（合唱挂多个歌手名） */
-const splitSingers = (singer: string): string[] => {
-  return singer.split(SINGER_SPLIT_RXP).map(s => s.trim()).filter(s => s.length > 0)
-}
 
 /**
  * 排除歌单名单（存 storage，与索引解耦：改名单只需重建索引）

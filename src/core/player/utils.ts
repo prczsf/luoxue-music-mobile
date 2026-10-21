@@ -1,5 +1,6 @@
 import { clearPlayedList } from './playedList'
-import { SPLIT_CHAR } from '@/config/constant'
+import { isMusicInvalid } from './invalidMusic'
+import { hasDislikeFor } from '@/utils/dislikeMatch'
 import { state } from '@/store/dislikeList'
 
 /**
@@ -38,22 +39,16 @@ export const filterMusicList = ({ playedList, listId, list, playerMusicInfo, dis
 
   let canPlayList: Array<LX.Music.MusicInfo | LX.Download.ListItem> = []
   const filteredPlayedList = playedList.filter(pmInfo => pmInfo.listId == listId && !pmInfo.isTempPlay).map(({ musicInfo }) => musicInfo)
-  const hasDislike = (info: LX.Music.MusicInfo) => {
-    const name = info.name?.replaceAll(SPLIT_CHAR.DISLIKE_NAME, SPLIT_CHAR.DISLIKE_NAME_ALIAS).toLocaleLowerCase().trim() ?? ''
-    const singer = info.singer?.replaceAll(SPLIT_CHAR.DISLIKE_NAME, SPLIT_CHAR.DISLIKE_NAME_ALIAS).toLocaleLowerCase().trim() ?? ''
-
-    return dislikeInfo.musicNames.has(name) || dislikeInfo.singerNames.has(singer) ||
-      dislikeInfo.names.has(`${name}${SPLIT_CHAR.DISLIKE_NAME}${singer}`)
-  }
-
-  let isDislike = false
+  let isExcluded = false
   const filteredList: Array<LX.Music.MusicInfo | LX.Download.ListItem> = list.filter(s => {
     // if (!assertApiSupport(s.source)) return false
     if ('progress' in s) {
       if (!s.isComplate) return false
-    } else if (hasDislike(s)) {
+    } else if (hasDislikeFor(dislikeInfo, s) || isMusicInvalid(s)) {
+      // "不喜欢"与"不可播放"（源已穷尽）同样只在播放时过滤，不删用户列表；
+      // 当前播放歌保留在列表内以便下标计算，随后由下面的分支把它从候选里剔除
       if (s.id != playerMusicInfo?.id) return false
-      isDislike = true
+      isExcluded = true
     }
 
     canPlayList.push(s)
@@ -66,7 +61,7 @@ export const filterMusicList = ({ playedList, listId, list, playerMusicInfo, dis
     return true
   })
   if (playerMusicInfo) {
-    if (isDislike) {
+    if (isExcluded) {
       if (filteredList.length <= 1) {
         filteredList.splice(0, 1)
         if (canPlayList.length > 1) {
@@ -120,7 +115,7 @@ export const filterList = async({ playedList, listId, list, playerMusicInfo, isN
     playedList,
     // savePath: global.lx.setting['download.savePath'],
     playerMusicInfo,
-    dislikeInfo: { names: state.dislikeInfo.names, musicNames: state.dislikeInfo.musicNames, singerNames: state.dislikeInfo.singerNames },
+    dislikeInfo: state.dislikeInfo,
     isNext,
   })
 

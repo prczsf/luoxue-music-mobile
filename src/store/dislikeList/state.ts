@@ -7,6 +7,8 @@ const state: InitState = {
     names: new Set(),
     musicNames: new Set(),
     singerNames: new Set(),
+    singerKeywords: [],
+    nameKeywords: [],
     rules: '',
   },
 }
@@ -15,5 +17,4 @@ const state: InitState = {
 export {
   state,
 }
-
 

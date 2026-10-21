@@ -8,6 +8,7 @@ import ListMusicAdd, { type MusicAddModalType as ListMusicAddType } from '@/comp
 import DownloadQualityModal, { type DownloadQualityModalType } from '@/components/DownloadQualityModal'
 import MultipleModeBar, { type MultipleModeBarType, type SelectMode } from './MultipleModeBar'
 import { clearMusicUrl, handleDislikeMusic, handlePlay, handlePlayLater, handleShare, handleShowMusicSourceDetail } from './listAction'
+import { handleBlockSinger } from '@/core/blockSinger'
 import { createStyle, checkStoragePermissions, requestStoragePermission, toast } from '@/utils/tools'
 import { downloadMusicFile, getDownloadDir } from '@/core/downloadMusic'
 import { startBatchDownload } from '@/core/download'
@@ -152,6 +153,7 @@ export default forwardRef<OnlineListType, OnlineListProps>(({
         onMusicSourceDetail={info => { void handleShowMusicSourceDetail(info.musicInfo) }}
         onRemoveCache={info => { void clearMusicUrl(info.musicInfo) }}
         onDislikeMusic={info => { void handleDislikeMusic(info.musicInfo) }}
+        onBlockSinger={info => { void handleBlockSinger(info.musicInfo) }}
       />
       <DownloadQualityModal ref={downloadQualityModalRef} onConfirm={handleDownloadQualityConfirm} />
       {/* <LoadingMask ref={loadingMaskRef} /> */}

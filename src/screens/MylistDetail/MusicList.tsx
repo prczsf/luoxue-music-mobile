@@ -3,6 +3,7 @@ import { TouchableOpacity, View } from 'react-native'
 
 import ListMenu, { type ListMenuType, type Position, type SelectInfo } from '../Home/Views/Mylist/MusicList/ListMenu'
 import { clearMusicUrl, downloadMusicFile, handleDislikeMusic, handlePlay, handlePlayLater, handleRemove, handleShare, handleShowMusicSourceDetail, handleUpdateMusicInfo, handleUpdateMusicPosition } from '../Home/Views/Mylist/MusicList/listAction'
+import { handleBlockSinger } from '@/core/blockSinger'
 import List, { type ListType } from '../Home/Views/Mylist/MusicList/List'
 import ListMusicAdd, { type MusicAddModalType as ListMusicAddType } from '@/components/MusicAddModal'
 import ListMusicMultiAdd, { type MusicMultiAddModalType as ListAddMultiType } from '@/components/MusicMultiAddModal'
@@ -309,6 +310,7 @@ export default ({ listId }: { listId: string }) => {
         onPlayLater={info => { hancelExitSelect(); handlePlayLater(info.listId, info.musicInfo, info.selectedList, hancelExitSelect) }}
         onRemove={info => { hancelExitSelect(); handleRemove(info.listId, info.musicInfo, info.selectedList, hancelExitSelect) }}
         onDislikeMusic={info => { void handleDislikeMusic(info.musicInfo) }}
+        onBlockSinger={info => { void handleBlockSinger(info.musicInfo) }}
         onCopyName={info => { handleShare(info.musicInfo) }}
         onMusicSourceDetail={info => { void handleShowMusicSourceDetail(info.musicInfo) }}
         onAdd={handleAddMusic}

@@ -322,6 +322,14 @@ declare global {
       'list.isClickPlayList': boolean
 
       /**
+       * 打开歌单时自动起播（车载场景，默认关闭）
+       * - `off` 不自动播放
+       * - `list` 从第一首开始
+       * - `random` 随机一首开始
+       */
+      'list.playAllOnOpen': 'off' | 'list' | 'random'
+
+      /**
        * 是否显示歌曲来源（仅对我的列表有效）
        */
       'list.isShowSource': boolean

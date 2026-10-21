@@ -5,12 +5,14 @@ import { Icon } from '@/components/common/Icon'
 import Text from '@/components/common/Text'
 import { useTheme } from '@/store/theme/hook'
 import { useI18n } from '@/lang'
-import { confirmDialog, createStyle, toast } from '@/utils/tools'
+import { chooseDialog, createStyle, toast } from '@/utils/tools'
 import { scaleSizeH, scaleSizeW } from '@/utils/pixelRatio'
 import { BorderWidths } from '@/theme'
 import { LIST_IDS } from '@/config/constant'
 import { playList } from '@/core/player/player'
 import { addDislikeInfo } from '@/core/dislikeList'
+import { blockSingers } from '@/core/blockSinger'
+import { splitSingers } from '@/utils/singer'
 import { removeAt, stop } from '@/core/roaming'
 import { useRoamingStatus } from './state'
 
@@ -123,14 +125,17 @@ export default ({ onClose }: { onClose?: () => void }) => {
   }
   const handleBlock = (musicInfo: LX.Music.MusicInfo) => {
     void (async() => {
-      const confirmed = await confirmDialog({
+      const choice = await chooseDialog({
         title: t('roaming_block'),
         message: musicInfo.name,
-        confirmButtonText: t('roaming_block'),
+        buttons: [t('dialog_cancel'), t('roaming_block'), t('block_singer')],
       })
-      if (!confirmed) return
-      await addDislikeInfo([{ name: musicInfo.name, singer: musicInfo.singer }])
-      toast(t('roaming_block_success', { name: musicInfo.name }))
+      if (choice == 1) {
+        await addDislikeInfo([{ name: musicInfo.name, singer: musicInfo.singer }])
+        toast(t('roaming_block_success', { name: musicInfo.name }))
+      } else if (choice == 2) {
+        await blockSingers(splitSingers(musicInfo.singer))
+      }
     })()
   }
 

@@ -11,6 +11,8 @@ import { COMPONENT_IDS, LIST_IDS } from '@/config/constant'
 import { setActiveList, getListMusics } from '@/core/list'
 import { useMyList } from '@/store/list/hook'
 import { createStyle } from '@/utils/tools'
+import { playList } from '@/core/player/player'
+import { getAutoplayStartIndex } from '@/utils/autoplayOnOpen'
 
 import MusicList from './MusicList'
 
@@ -34,7 +36,11 @@ export default ({ componentId, listId }: { componentId: string, listId: string }
     setComponentId(COMPONENT_IDS.mylistDetail, componentId)
     setActiveList(listId)
     // 预热该列表歌曲缓存，详情 MusicList 挂载后经 mylistToggled/初载拉取
-    void getListMusics(listId)
+    void getListMusics(listId).then(list => {
+      const index = getAutoplayStartIndex(`list:${listId}`, list.length)
+      if (index == null) return
+      void playList(listId, index)
+    })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 

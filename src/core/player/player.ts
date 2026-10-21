@@ -23,11 +23,25 @@ import { getMusicUrl, getPicPath, getLyricInfo } from '@/core/music'
 import { requestMsg } from '@/utils/message'
 import { getRandom } from '@/utils/common'
 import { filterList } from './utils'
+import { isMusicInvalid, markMusicInvalid, unmarkMusicInvalid } from './invalidMusic'
+import { isSourceExhaustedError, isTransientUrlError } from './urlError'
 import BackgroundTimer from 'react-native-background-timer'
-import { checkIgnoringBatteryOptimization, checkNotificationPermission, debounceBackgroundTimer } from '@/utils/tools'
+import { checkIgnoringBatteryOptimization, checkNotificationPermission, debounceBackgroundTimer, toast } from '@/utils/tools'
 import { LIST_IDS } from '@/config/constant'
 import { addListMusics, removeListMusics, getListMusics } from '@/core/list'
 import { addDislikeInfo, hasDislike } from '@/core/dislikeList'
+
+/**
+ * 没有可播放歌曲时给一次提示。
+ *
+ * 区分「全部命中屏蔽规则」与「没有可播放的歌曲（源失效 / 已播完）」，
+ * 避免用户点播放后像什么都没发生（旧行为是静默停止，车机上尤其像卡死）。
+ */
+const showNoPlayableTip = (list: Array<LX.Music.MusicInfo | LX.Download.ListItem>) => {
+  if (!list.length) return
+  const isAllBlocked = list.every(musicInfo => hasDislike('progress' in musicInfo ? musicInfo.metadata.musicInfo : musicInfo))
+  toast(global.i18n.t(isAllBlocked ? 'player_all_music_disliked_tip' : 'player_no_playable_music_tip'))
+}
 
 // import { checkMusicFileAvailable } from '@renderer/utils/music'
 
@@ -70,6 +84,7 @@ const diffCurrentMusicInfo = (curMusicInfo: LX.Music.MusicInfo | LX.Download.Lis
   // return curMusicInfo !== playerState.playMusicInfo.musicInfo || playerState.isPlay
   return createGettingUrlId(curMusicInfo) != global.lx.gettingUrlId || curMusicInfo.id != playerState.playMusicInfo.musicInfo?.id || playerState.isPlay
 }
+
 
 let cancelDelayRetry: (() => void) | null = null
 const delayRetry = async(musicInfo: LX.Music.MusicInfo | LX.Download.ListItem, isRefresh = false): Promise<string | null> => {
@@ -139,11 +154,15 @@ export const setMusicUrl = (musicInfo: LX.Music.MusicInfo | LX.Download.ListItem
   global.lx.gettingUrlId = createGettingUrlId(musicInfo)
   void getMusicPlayUrl(musicInfo, isRefresh).then((url) => {
     if (!url) return
+    unmarkMusicInvalid(musicInfo)
     setResource(musicInfo, url, playerState.progress.nowPlayTime)
   }).catch((err: any) => {
     console.log(err)
     setStatusText(err.message as string)
     global.app_event.error()
+    // 源已穷尽（或非临时故障）时只做"本次运行内不可播放"标记，由播放过滤跳过；
+    // 绝不动用户列表——列表即用户数据，删除会立即写库且不可撤销
+    if (isSourceExhaustedError(err) || !isTransientUrlError(err)) markMusicInvalid(musicInfo)
     addDelayNextTimeout()
   }).finally(() => {
     if (musicInfo === playerState.playMusicInfo.musicInfo) {
@@ -346,8 +365,9 @@ export const getNextPlayMusicInfo = async(): Promise<LX.Player.PlayMusicInfo | n
     const roamingList = currentList as LX.Music.MusicInfo[]
     for (let i = playInfo.playerPlayIndex + 1; i < roamingList.length; i++) {
       const musicInfo = roamingList[i]
-      if (musicInfo && !hasDislike(musicInfo)) return { musicInfo, listId: currentListId, isTempPlay: false }
+      if (musicInfo && !hasDislike(musicInfo) && !isMusicInvalid(musicInfo)) return { musicInfo, listId: currentListId, isTempPlay: false }
     }
+    if (roamingList.length > playInfo.playerPlayIndex + 1) showNoPlayableTip(roamingList.slice(playInfo.playerPlayIndex + 1))
     return null
   }
 
@@ -450,11 +470,12 @@ export const playNext = async(isAutoToggle = false): Promise<void> => {
     const roamingList = currentList as LX.Music.MusicInfo[]
     for (let i = playInfo.playerPlayIndex + 1; i < roamingList.length; i++) {
       const musicInfo = roamingList[i]
-      if (musicInfo && !hasDislike(musicInfo)) {
+      if (musicInfo && !hasDislike(musicInfo) && !isMusicInvalid(musicInfo)) {
         await handlePlayNext({ musicInfo, listId: currentListId, isTempPlay: false })
         return
       }
     }
+    if (roamingList.length > playInfo.playerPlayIndex + 1) showNoPlayableTip(roamingList.slice(playInfo.playerPlayIndex + 1))
     return
   }
 
@@ -497,13 +518,17 @@ export const playNext = async(isAutoToggle = false): Promise<void> => {
     isNext: true,
   })
 
-  if (!filteredList.length) return handleToggleStop()
+  if (!filteredList.length) {
+    showNoPlayableTip(currentList)
+    return handleToggleStop()
+  }
   // let currentIndex: number = filteredList.indexOf(currentList[playInfo.playerPlayIndex])
   if (playerIndex == -1 && filteredList.length) playerIndex = 0
   let nextIndex = playerIndex
 
   let togglePlayMethod = settingState.setting['player.togglePlayMethod']
-  if (!isAutoToggle) {
+  // 当前歌已被判定不可播放时一律按顺序推进，避免"单曲循环/播完停止"把播放卡死在死歌上
+  if (!isAutoToggle || isMusicInvalid(playMusicInfo.musicInfo)) {
     switch (togglePlayMethod) {
       case 'list':
       case 'singleLoop':
@@ -583,7 +608,10 @@ export const playPrev = async(isAutoToggle = false): Promise<void> => {
     playerMusicInfo: currentList[playInfo.playerPlayIndex],
     isNext: false,
   })
-  if (!filteredList.length) return handleToggleStop()
+  if (!filteredList.length) {
+    showNoPlayableTip(currentList)
+    return handleToggleStop()
+  }
 
   // let currentIndex = filteredList.indexOf(currentList[playInfo.playerPlayIndex])
   if (playerIndex == -1 && filteredList.length) playerIndex = 0

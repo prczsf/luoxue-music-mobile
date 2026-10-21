@@ -11,7 +11,7 @@ export interface MusicListProps {
 }
 
 export interface MusicListType {
-  loadList: (source: LX.OnlineSource, listId: string) => void
+  loadList: (source: LX.OnlineSource, listId: string) => Promise<void>
 }
 
 export default forwardRef<MusicListType, MusicListProps>(({ componentId }, ref) => {

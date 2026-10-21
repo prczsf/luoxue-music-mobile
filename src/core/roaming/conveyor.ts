@@ -1,6 +1,8 @@
 import { LIST_IDS } from '@/config/constant'
 import { removeMusicList, setMusicList } from '@/utils/listManage'
 import { arrPush } from '@/utils/common'
+import { isMusicInvalid } from '@/core/player/invalidMusic'
+import { hasDislike } from '@/core/dislikeList'
 import { playList } from '@/core/player/player'
 import { updatePlayIndex } from '@/core/player/playInfo'
 import playerState from '@/store/player/state'
@@ -135,6 +137,33 @@ const trimIfNeeded = () => {
   updatePlayIndex()
 }
 
+/**
+ * 剔除窗口内「不该播」的歌：不可播放（源已穷尽，标记见 core/player/invalidMusic）
+ * + 命中屏蔽规则（不喜欢 / 屏蔽歌手 / 歌名关键词）。
+ *
+ * 只做内存剔除：漫游窗口本就是一次性的虚拟列表，不碰用户数据、不写库。
+ * 当前播放歌不剔除（ADR 0003 不变式：当前歌永远在窗口内），
+ * 它会在下一次切歌触发本函数时被清掉——那时它已经退到播放位之前。
+ */
+const isExcludedMusic = (musicInfo: LX.Music.MusicInfo) => isMusicInvalid(musicInfo) || hasDislike(musicInfo)
+
+const dropExcludedMusic = () => {
+  const playIndex = getWindowPlayIndex()
+  if (playIndex < 0) return
+  let removed = 0
+  for (let i = window_.length; i--;) {
+    if (i == playIndex || !isExcludedMusic(window_[i])) continue
+    window_.splice(i, 1)
+    removed++
+  }
+  if (!removed) return
+  syncWindowFingerprints()
+  // 剔除发生在当前歌之前时下标会漂移，按当前歌 id 重算（与修剪同一处理方式）
+  updatePlayIndex()
+  void backfill(removed)
+  notify()
+}
+
 const handleMusicToggled = () => {
   if (!session) return
   const playMusicInfo = playerState.playMusicInfo
@@ -145,6 +174,7 @@ const handleMusicToggled = () => {
     return
   }
   lru.add(getMusicFingerprint(playMusicInfo.musicInfo as LX.Music.MusicInfo))
+  dropExcludedMusic()
   trimIfNeeded()
   const playIndex = getWindowPlayIndex()
   if (playIndex >= 0 && window_.length - playIndex - 1 < REFILL_THRESHOLD) void backfill(REFILL_AMOUNT)
