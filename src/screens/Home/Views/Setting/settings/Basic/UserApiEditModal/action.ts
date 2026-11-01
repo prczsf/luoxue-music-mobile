@@ -3,9 +3,13 @@ import { readFile } from '@/utils/fs'
 import { log } from '@/utils/log'
 import { toast } from '@/utils/tools'
 
+interface ImportMeta {
+  url?: string
+  importType?: LX.UserApi.UserApiImportType
+}
 
-export const handleImportScript = async(script: string) => {
-  await importUserApi(script).then(() => {
+export const handleImportScript = async(script: string, meta?: ImportMeta) => {
+  await importUserApi(script, meta).then(() => {
     toast(global.i18n.t('user_api_import_success_tip'))
   }).catch((error: any) => {
     log.error(error.stack)
@@ -17,9 +21,8 @@ export const handleImportLocalFile = (path: string) => {
   // toast(global.i18n.t('setting_backup_part_import_list_tip_unzip'))
   void readFile(path).then(async script => {
     if (script == null) throw new Error('Read file failed')
-    void handleImportScript(script)
+    void handleImportScript(script, { importType: 'local' })
   }).catch((error: any) => {
     toast(global.i18n.t('user_api_import_failed_tip', { message: error.message }), 'long')
   })
 }
-

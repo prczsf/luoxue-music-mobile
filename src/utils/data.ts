@@ -567,7 +567,10 @@ const matchInfo = (scriptInfo: string) => {
 
   return infos as Record<keyof typeof INFO_NAMES, string>
 }
-export const addUserApi = async(script: string): Promise<LX.UserApi.UserApiInfo> => {
+export const addUserApi = async(script: string, meta?: {
+  url?: string
+  importType?: LX.UserApi.UserApiImportType
+}): Promise<LX.UserApi.UserApiInfo> => {
   const result = /^\/\*[\S|\s]+?\*\//.exec(script)
   if (!result) throw new Error(global.i18n.t('user_api_add_failed_tip'))
 
@@ -578,7 +581,10 @@ export const addUserApi = async(script: string): Promise<LX.UserApi.UserApiInfo>
     id: `user_api_${Math.random().toString().substring(2, 5)}_${Date.now()}`,
     ...scriptInfo,
     allowShowUpdateAlert: true,
+    importType: meta?.importType ?? 'local',
+    importedAt: Date.now(),
   }
+  if (meta?.url) apiInfo.url = meta.url
   userApis.push(apiInfo)
   await saveDataMultiple([
     [userApiPrefix, userApis],
@@ -586,12 +592,63 @@ export const addUserApi = async(script: string): Promise<LX.UserApi.UserApiInfo>
   ])
   return apiInfo
 }
+export const updateUserApiInfo = async(id: string, patch: Partial<Pick<LX.UserApi.UserApiInfo, 'url'>>): Promise<LX.UserApi.UserApiInfo | null> => {
+  const index = userApis.findIndex(api => api.id == id)
+  if (index < 0) return null
+  const newInfo = { ...userApis[index], ...patch }
+  userApis.splice(index, 1, newInfo)
+  await saveData(userApiPrefix, userApis)
+  return { ...newInfo }
+}
+// 覆盖指定源的脚本：backupPrev 为 true 时把当前脚本留存为上一版，供更新失败时回滚
+const applyUserApiScript = async(id: string, script: string, backupPrev: boolean): Promise<LX.UserApi.UserApiInfo> => {
+  const index = userApis.findIndex(api => api.id == id)
+  if (index < 0) throw new Error('api not found')
+
+  const result = /^\/\*[\S|\s]+?\*\//.exec(script)
+  if (!result) throw new Error(global.i18n.t('user_api_add_failed_tip'))
+
+  const scriptInfo = matchInfo(result[0])
+  const target = userApis[index]
+  const newInfo: LX.UserApi.UserApiInfo = {
+    ...target,
+    // 新脚本没写的字段沿用原值，避免把源名刷成兜底名或清空作者信息
+    name: scriptInfo.name || target.name,
+    version: scriptInfo.version || target.version,
+    author: scriptInfo.author || target.author,
+    description: scriptInfo.description || target.description,
+    homepage: scriptInfo.homepage || target.homepage,
+  }
+
+  const datas: Array<[string, any]> = []
+  if (backupPrev) {
+    const oldScript = await getData<string>(`${userApiPrefix}${id}`) ?? ''
+    if (oldScript) datas.push([`${userApiPrefix}${id}__prev`, oldScript])
+  }
+  userApis.splice(index, 1, newInfo)
+  datas.push([userApiPrefix, userApis])
+  datas.push([`${userApiPrefix}${id}`, script])
+  await saveDataMultiple(datas)
+  return { ...newInfo }
+}
+export const updateUserApiScript = async(id: string, script: string): Promise<LX.UserApi.UserApiInfo> => {
+  return applyUserApiScript(id, script, true)
+}
+export const restoreUserApiScript = async(id: string): Promise<LX.UserApi.UserApiInfo> => {
+  const prevScript = await getData<string>(`${userApiPrefix}${id}__prev`)
+  if (!prevScript) throw new Error(global.i18n.t('user_api_restore_prev_failed'))
+  return applyUserApiScript(id, prevScript, false)
+}
+export const getUserApiScriptPrev = async(id: string): Promise<string | null> => {
+  return await getData<string>(`${userApiPrefix}${id}__prev`) ?? null
+}
 export const removeUserApi = async(ids: string[]) => {
   if (!userApis) return []
   const _ids: string[] = []
   for (let index = userApis.length - 1; index > -1; index--) {
     if (ids.includes(userApis[index].id)) {
       _ids.push(`${userApiPrefix}${userApis[index].id}`)
+      _ids.push(`${userApiPrefix}${userApis[index].id}__prev`)
       userApis.splice(index, 1)
       ids.splice(index, 1)
     }

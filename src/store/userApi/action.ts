@@ -21,6 +21,14 @@ export const addUserApi = (info: LX.UserApi.UserApiInfo) => {
   event.list_changed([...state.list])
 }
 
+export const updateUserApi = (info: LX.UserApi.UserApiInfo) => {
+  const targetIndex = state.list.findIndex(api => api.id == info.id)
+  if (targetIndex < 0) return
+  state.list.splice(targetIndex, 1, { ...info })
+
+  event.list_changed([...state.list])
+}
+
 
 export const setUserApiAllowShowUpdateAlert = (id: string, enable: boolean) => {
   const targetIndex = state.list.findIndex(api => api.id == id)

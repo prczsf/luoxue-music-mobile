@@ -1,35 +1,48 @@
-import { useCallback } from 'react'
+import { useCallback, useRef } from 'react'
 import Text from '@/components/common/Text'
 import { View, TouchableOpacity, ScrollView } from 'react-native'
-import { confirmDialog, createStyle } from '@/utils/tools'
+import { confirmDialog, createStyle, clipboardWriteText, toast } from '@/utils/tools'
 import { useTheme } from '@/store/theme/hook'
 import { useI18n } from '@/lang'
 import { useUserApiList, state as userApiState } from '@/store/userApi'
 import { useSettingValue } from '@/store/setting/hook'
-import { removeUserApi, setUserApiAllowShowUpdateAlert } from '@/core/userApi'
+import { removeUserApi, refreshUserApi, restorePrevUserApi, setUserApiAllowShowUpdateAlert, setUserApiUrl } from '@/core/userApi'
 import { BorderRadius } from '@/theme'
 import CheckBox from '@/components/common/CheckBox'
 import { Icon } from '@/components/common/Icon'
 import settingState from '@/store/setting/state'
 import apiSourceInfo from '@/utils/musicSdk/api-source-info'
 import { setApiSource } from '@/core/apiSource'
+import type { Position } from '@/components/common/Menu'
+import UserApiMenu, { type UserApiMenuType } from './UserApiMenu'
+import UserApiDetail, { type UserApiDetailType } from './UserApiDetail'
+import UserApiSetUrl, { type UserApiSetUrlType } from './UserApiSetUrl'
 
 const formatVersionName = (version: string) => {
   return /^\d/.test(version) ? `v${version}` : version
 }
-const ListItem = ({ item, activeId, onRemove, onChangeAllowShowUpdateAlert }: {
+const getHost = (url: string) => /^https?:\/\/([^/?#]+)/i.exec(url)?.[1] ?? url
+
+const ListItem = ({ item, activeId, onRemove, onChangeAllowShowUpdateAlert, onShowMenu }: {
   item: LX.UserApi.UserApiInfo
   activeId: string
   onRemove: (id: string, name: string) => void
   onChangeAllowShowUpdateAlert: (id: string, enabled: boolean) => void
+  onShowMenu: (item: LX.UserApi.UserApiInfo, position: Position) => void
 }) => {
   const theme = useTheme()
   const t = useI18n()
+  const moreButtonRef = useRef<TouchableOpacity>(null)
   const changeAllowShowUpdateAlert = (check: boolean) => {
     onChangeAllowShowUpdateAlert(item.id, check)
   }
   const handleRemove = () => {
     onRemove(item.id, item.name)
+  }
+  const handleShowMenu = () => {
+    moreButtonRef.current?.measure((fx, fy, width, height, px, py) => {
+      onShowMenu(item, { x: Math.ceil(px), y: Math.ceil(py), w: Math.ceil(width), h: Math.ceil(height) })
+    })
   }
 
   return (
@@ -56,6 +69,9 @@ const ListItem = ({ item, activeId, onRemove, onChangeAllowShowUpdateAlert }: {
         <CheckBox check={item.allowShowUpdateAlert} label={t('user_api_allow_show_update_alert')} onChange={changeAllowShowUpdateAlert} size={0.86} />
       </View>
       <View style={styles.listItemRight}>
+        <TouchableOpacity style={styles.btn} onPress={handleShowMenu} ref={moreButtonRef}>
+          <Icon name="dots-vertical" color={theme['c-button-font']} size={12} />
+        </TouchableOpacity>
         <TouchableOpacity style={styles.btn} onPress={handleRemove}>
           <Icon name="close" color={theme['c-button-font']} />
         </TouchableOpacity>
@@ -64,20 +80,14 @@ const ListItem = ({ item, activeId, onRemove, onChangeAllowShowUpdateAlert }: {
   )
 }
 
-export interface UserApiEditModalProps {
-  onSave: (rules: string) => void
-  // onSourceChange: SourceSelectorProps['onSourceChange']
-}
-export interface UserApiEditModalType {
-  show: (rules: string) => void
-}
-
-
 export default () => {
   const userApiList = useUserApiList()
   const apiSource = useSettingValue('common.apiSource')
   const theme = useTheme()
   const t = useI18n()
+  const menuRef = useRef<UserApiMenuType>(null)
+  const detailRef = useRef<UserApiDetailType>(null)
+  const setUrlRef = useRef<UserApiSetUrlType>(null)
 
   const handleRemove = useCallback(async(id: string, name: string) => {
     const confirm = await confirmDialog({
@@ -98,27 +108,93 @@ export default () => {
   const handleChangeAllowShowUpdateAlert = useCallback((id: string, enabled: boolean) => {
     void setUserApiAllowShowUpdateAlert(id, enabled)
   }, [])
+  const handleShowMenu = useCallback((item: LX.UserApi.UserApiInfo, position: Position) => {
+    menuRef.current?.show(item, position)
+  }, [])
+  const handleCopyUrl = useCallback((item: LX.UserApi.UserApiInfo) => {
+    if (!item.url) return
+    clipboardWriteText(item.url)
+    toast(t('user_api_copy_url_success'))
+  }, [t])
+  const handleRefresh = useCallback(async(item: LX.UserApi.UserApiInfo) => {
+    if (!item.url) return
+    const confirm = await confirmDialog({
+      message: t('user_api_refresh_confirm', { host: getHost(item.url), name: item.name }),
+      cancelButtonText: t('dialog_cancel'),
+      confirmButtonText: t('dialog_confirm'),
+      bgClose: false,
+    })
+    if (!confirm) return
+    toast(t('user_api_refreshing'))
+    try {
+      const result = await refreshUserApi(item.id)
+      toast(t(result.applied ? 'user_api_refresh_success' : 'user_api_refresh_success_pending', {
+        version: result.info.version ? formatVersionName(result.info.version) : '',
+      }))
+    } catch (error: any) {
+      toast(t('user_api_refresh_failed', { message: error?.message ?? '' }), 'long')
+    }
+  }, [t])
+  const handleDetail = useCallback((item: LX.UserApi.UserApiInfo) => {
+    detailRef.current?.show(item)
+  }, [])
+  const handleSetUrl = useCallback((item: LX.UserApi.UserApiInfo) => {
+    setUrlRef.current?.show(item)
+  }, [])
+  const handleSaveUrl = useCallback(async(item: LX.UserApi.UserApiInfo, url: string) => {
+    await setUserApiUrl(item.id, url)
+    toast(t('user_api_set_url_success'))
+  }, [t])
+  const handleRestorePrev = useCallback(async(item: LX.UserApi.UserApiInfo) => {
+    const confirm = await confirmDialog({
+      message: `${t('user_api_restore_prev')}「${item.name}」`,
+      cancelButtonText: t('dialog_cancel'),
+      confirmButtonText: t('dialog_confirm'),
+      bgClose: false,
+    })
+    if (!confirm) return
+    try {
+      await restorePrevUserApi(item.id)
+      toast(t('user_api_restore_prev_success'))
+    } catch (error: unknown) {
+      toast((error as Error)?.message ?? t('user_api_restore_prev_failed'), 'long')
+    }
+  }, [t])
 
   return (
-    <ScrollView style={styles.scrollView} keyboardShouldPersistTaps={'always'}>
-      <View onStartShouldSetResponder={() => true}>
-        {
-          userApiList.length
-            ? userApiList.map((item) => {
-              return (
-              <ListItem
-                key={item.id}
-                item={item}
-                activeId={apiSource}
-                onRemove={handleRemove}
-                onChangeAllowShowUpdateAlert={handleChangeAllowShowUpdateAlert}
-              />
-              )
-            })
-            : <Text style={styles.tipText} color={theme['c-font-label']}>{t('user_api_empty')}</Text>
-        }
-      </View>
-    </ScrollView>
+    <>
+      <ScrollView style={styles.scrollView} keyboardShouldPersistTaps={'always'}>
+        <View onStartShouldSetResponder={() => true}>
+          {
+            userApiList.length
+              ? userApiList.map((item) => {
+                return (
+                <ListItem
+                  key={item.id}
+                  item={item}
+                  activeId={apiSource}
+                  onRemove={handleRemove}
+                  onChangeAllowShowUpdateAlert={handleChangeAllowShowUpdateAlert}
+                  onShowMenu={handleShowMenu}
+                />
+                )
+              })
+              : <Text style={styles.tipText} color={theme['c-font-label']}>{t('user_api_empty')}</Text>
+          }
+        </View>
+      </ScrollView>
+      <UserApiMenu
+        ref={menuRef}
+        onCopyUrl={handleCopyUrl}
+        onRefresh={handleRefresh}
+        onDetail={handleDetail}
+        onSetUrl={handleSetUrl}
+        onRestorePrev={handleRestorePrev}
+        onRemove={(item) => { void handleRemove(item.id, item.name) }}
+      />
+      <UserApiDetail ref={detailRef} onSetUrl={handleSetUrl} />
+      <UserApiSetUrl ref={setUrlRef} onSave={handleSaveUrl} />
+    </>
   )
 }
 
@@ -146,14 +222,11 @@ const styles = createStyle({
   },
   listItemRight: {
     flex: 0,
-    // backgroundColor: 'rgba(0, 0, 0, 0.2)',
+    flexDirection: 'row',
+    alignItems: 'center',
   },
-  // btns: {
-  //   padding: 5,
-  // },
   btn: {
     padding: 10,
-    // backgroundColor: 'rgba(0, 0, 0, 0.2)',
   },
   tipText: {
     textAlign: 'center',
@@ -161,5 +234,3 @@ const styles = createStyle({
     marginBottom: 15,
   },
 })
-
-

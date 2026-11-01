@@ -13,6 +13,8 @@ declare namespace LX {
     type UserApiSources = Record<LX.Source, UserApiSourceInfo>
 
 
+    type UserApiImportType = 'online' | 'local'
+
     interface UserApiInfo {
       id: string
       name: string
@@ -23,6 +25,11 @@ declare namespace LX {
       homepage: string
       version: string
       sources?: UserApiSources
+      // 在线导入的源地址，本地导入/旧版本导入的源为空
+      url?: string
+      // 当初的导入方式，仅用于展示，可用性判断只看 url
+      importType?: UserApiImportType
+      importedAt?: number
     }
 
     interface UserApiStatus {
