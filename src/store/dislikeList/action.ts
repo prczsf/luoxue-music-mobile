@@ -10,6 +10,7 @@ export const hasDislike = (info: LX.Music.MusicInfo | LX.Download.ListItem) => {
 
 export const setDislikeInfo = (dislikeInfo: LX.Dislike.DislikeInfo) => {
   state.dislikeInfo.rules = dislikeInfo.rules
+  state.dislikeInfo.rawRules = dislikeInfo.rawRules
   state.dislikeInfo.names = dislikeInfo.names
   state.dislikeInfo.musicNames = dislikeInfo.musicNames
   state.dislikeInfo.singerNames = dislikeInfo.singerNames

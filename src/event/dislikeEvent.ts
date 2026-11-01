@@ -4,7 +4,8 @@ import { saveDislikeListRules } from '@/utils/data'
 import { setDislikeInfo } from '@/core/dislikeList'
 
 const updateList = async(dislikeInfo: LX.Dislike.DislikeInfo) => {
-  await saveDislikeListRules(dislikeInfo.rules)
+  // 存原始文本：规范化只用于匹配，不应改写用户写下的规则
+  await saveDislikeListRules(dislikeInfo.rawRules)
   setDislikeInfo(dislikeInfo)
 }
 

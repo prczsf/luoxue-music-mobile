@@ -38,13 +38,13 @@ export default memo(() => {
   const keywordTags = useMemo(() => info.nameKeywords.map(keyword => ({ rule: buildNameKeywordRule(keyword), label: keyword })), [info])
 
   const saveRules = async(rules: string) => {
-    if (rules.trim() == state.dislikeInfo.rules.trim()) return
+    if (rules.trim() == state.dislikeInfo.rawRules.trim()) return
     await overwirteDislikeInfo(rules)
     toast(t('setting__other_dislike_list_saved_tip'))
   }
 
   const handleShow = () => {
-    modalRef.current?.show(state.dislikeInfo.rules)
+    modalRef.current?.show(state.dislikeInfo.rawRules)
   }
 
   const handleSave = (rules: string) => {
@@ -58,8 +58,8 @@ export default memo(() => {
       return false
     }
     if (normalizeDislikeText(value).length < MIN_KEYWORD_LEN) toast(t('setting_dislike_rule_short_tip'))
-    const nextRules = appendDislikeRule(state.dislikeInfo.rules, build(value))
-    if (nextRules == state.dislikeInfo.rules.trim()) {
+    const nextRules = appendDislikeRule(state.dislikeInfo.rawRules, build(value))
+    if (nextRules == state.dislikeInfo.rawRules.trim()) {
       toast(t('setting_dislike_rule_exists_tip'))
       return true
     }
@@ -68,7 +68,7 @@ export default memo(() => {
   }
 
   const handleRemoveRule = (rule: string) => {
-    void saveRules(removeDislikeRule(state.dislikeInfo.rules, rule))
+    void saveRules(removeDislikeRule(state.dislikeInfo.rawRules, rule))
   }
 
   return (

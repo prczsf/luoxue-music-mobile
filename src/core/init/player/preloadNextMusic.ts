@@ -2,8 +2,6 @@ import { getMusicUrl } from '@/core/music'
 import { getNextPlayMusicInfo, resetRandomNextMusicInfo } from '@/core/player/player'
 import { checkUrl } from '@/utils/request'
 import { isCached } from '@/plugins/player/utils'
-import { markMusicInvalid } from '@/core/player/invalidMusic'
-import { isSourceExhaustedError } from '@/core/player/urlError'
 import BackgroundTimer from 'react-native-background-timer'
 
 /**
@@ -89,7 +87,7 @@ const preloadNextMusicUrl = async(): Promise<void> => {
   let info = preloadMusicInfo.info
   try {
     if (!info) {
-      info = await getNextPlayMusicInfo()
+      info = await getNextPlayMusicInfo(true)
       if (isStale()) return
       preloadMusicInfo.info = info
       if (!info) return
@@ -107,9 +105,11 @@ const preloadNextMusicUrl = async(): Promise<void> => {
   } catch (err) {
     if (isStale()) return
     console.log('preload next music url error', err)
-    // 只有"换遍所有音源仍失败"才判歌曲不可播放；其余错误（临时故障、本地文件读取失败等）只重试
-    if (info && isSourceExhaustedError(err)) markMusicInvalid(info.musicInfo)
-    else scheduleRetry()
+    // 预取是投机性的后台优化：即便"换遍所有音源都失败"，也可能只是当前网络不行。
+    // 这里绝不给歌曲打"不可播放"标记——否则 filterMusicList 会把它剔除，
+    // 它永远播不到，也就永远没有机会被 unmark，形成静默的永久误杀。
+    // 判决权完全留给前台真实播放链路（见 core/player/player.ts 的 setMusicUrl）。
+    scheduleRetry()
   } finally {
     if (!isStale()) preloadMusicInfo.isLoading = false
   }

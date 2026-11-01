@@ -1,7 +1,7 @@
 import { state } from '@/store/dislikeList'
 
 export const getLocalDislikeData = async(): Promise<LX.Dislike.DislikeRules> => {
-  return state.dislikeInfo.rules
+  return state.dislikeInfo.rawRules
 }
 
 export const setLocalDislikeData = async(listData: LX.Dislike.DislikeRules) => {

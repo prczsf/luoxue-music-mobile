@@ -35,7 +35,10 @@ declare namespace LX {
       /** 歌名关键词「包含」匹配规则（`~关键词`，长度 >= 2 才会进入此列） */
       nameKeywords: string[]
       // list: LX.Dislike.ListItem[]
+      /** 规范化后的规则文本（小写、@→#、去重），只用于匹配 */
       rules: DislikeRules
+      /** 用户输入的原始规则文本，用于展示、编辑与持久化，避免把用户的写法改掉 */
+      rawRules: DislikeRules
     }
   }
 }

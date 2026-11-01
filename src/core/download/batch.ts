@@ -34,14 +34,19 @@ export const startBatchDownload = async(
   const limited = onlineList.length > MAX_BATCH_COUNT
   const targetList = onlineList.slice(0, MAX_BATCH_COUNT)
   const seenIds = new Set<string>()
+  // 同一批里两首不同 id 的歌可能生成同名文件（同名同歌手的不同来源/版本），
+  // 只按 id 去重会让它们互相覆盖，这里按落盘文件名一并去重
+  const seenBaseNames = new Set<string>()
   const pending: LX.Music.MusicInfoOnline[] = []
   let skipped = 0
   for (const music of targetList) {
-    if (seenIds.has(music.id) || hasTask(music.id) || existingNames.has(getMusicBaseName(music))) {
+    const baseName = getMusicBaseName(music)
+    if (seenIds.has(music.id) || hasTask(music.id) || existingNames.has(baseName) || seenBaseNames.has(baseName)) {
       skipped++
       continue
     }
     seenIds.add(music.id)
+    seenBaseNames.add(baseName)
     pending.push(music)
   }
 

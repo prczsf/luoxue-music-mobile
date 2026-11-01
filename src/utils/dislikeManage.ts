@@ -9,7 +9,15 @@ const dislikeInfo: LX.Dislike.DislikeInfo = {
   singerKeywords: [],
   nameKeywords: [],
   rules: '',
+  rawRules: '',
 }
+
+/**
+ * 仅用于「规则行」比较的轻量归一化：只做大小写与空白处理，不动 `@`。
+ * 标签墙上的规则来自规范化后的集合（小写），而原始文本可能是任意大小写，
+ * 直接按字符串全等比较会导致"删不掉"和"重复添加"。
+ */
+const normalizeRuleLine = (line: string) => line.trim().toLocaleLowerCase()
 
 export const getDislikeInfo = async() => {
   updateDislikeInfo(await getDislikeListRules())
@@ -25,6 +33,7 @@ export const getDislikeInfo = async() => {
  * 过短的规则自动降级为全等，避免 `@李` 命中半个曲库。
  */
 const updateDislikeInfo = (rules: string) => {
+  dislikeInfo.rawRules = rules
   dislikeInfo.names.clear()
   dislikeInfo.musicNames.clear()
   dislikeInfo.singerNames.clear()
@@ -75,7 +84,7 @@ const updateDislikeInfo = (rules: string) => {
 }
 
 export const addDislikeInfo = async(infos: LX.Dislike.DislikeMusicInfo[]) => {
-  updateDislikeInfo(dislikeInfo.rules + '\n' + infos.map(info => `${info.name ?? ''}${SPLIT_CHAR.DISLIKE_NAME}${info.singer ?? ''}`).join('\n'))
+  updateDislikeInfo(dislikeInfo.rawRules + '\n' + infos.map(info => `${info.name ?? ''}${SPLIT_CHAR.DISLIKE_NAME}${info.singer ?? ''}`).join('\n'))
   return dislikeInfo
 }
 
@@ -93,15 +102,15 @@ export const clearDislikeInfo = async() => {
 export const appendDislikeRule = (rules: string, rule: string) => {
   const target = rule.trim()
   const list = rules.split('\n').map(s => s.trim()).filter(s => s.length > 0)
-  if (!target || list.includes(target)) return list.join('\n')
+  if (!target || list.some(s => normalizeRuleLine(s) == normalizeRuleLine(target))) return list.join('\n')
   list.push(target)
   return list.join('\n')
 }
 
 /** 删除一条规则，返回新的规则文本 */
 export const removeDislikeRule = (rules: string, rule: string) => {
-  const target = rule.trim()
-  return rules.split('\n').map(s => s.trim()).filter(s => s.length > 0 && s != target).join('\n')
+  const target = normalizeRuleLine(rule)
+  return rules.split('\n').map(s => s.trim()).filter(s => s.length > 0 && normalizeRuleLine(s) != target).join('\n')
 }
 
 /** 歌手规则文本：`@歌手`（长度 >= MIN_KEYWORD_LEN 时按包含匹配） */

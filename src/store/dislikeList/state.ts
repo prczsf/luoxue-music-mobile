@@ -10,6 +10,7 @@ const state: InitState = {
     singerKeywords: [],
     nameKeywords: [],
     rules: '',
+    rawRules: '',
   },
 }
 
