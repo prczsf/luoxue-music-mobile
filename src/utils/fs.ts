@@ -65,6 +65,15 @@ export const writeFile = async(path: string, data: string, encoding?: Encoding) 
 
 export const appendFile = async(path: string, data: string, encoding?: Encoding) => FileSystem.appendFile(path, data, encoding)
 
+/**
+ * 下载文件的连接/读取超时（毫秒）。
+ *
+ * 必须显式给值：Android 侧 RNFS 用 `options.getInt("readTimeout")` 取值，
+ * 键不存在时返回 0，而 Java `Socket.setReadTimeout(0)` 表示**无限等待**——
+ * 服务端只接不发时任务会永远卡住且不报错。
+ */
+export const DOWNLOAD_TIMEOUT = 15_000
+
 export const downloadFile = (url: string, path: string, options: Omit<RNFS.DownloadFileOptions, 'fromUrl' | 'toFile'> = {}) => {
   if (!options.headers) {
     options.headers = {
@@ -74,6 +83,8 @@ export const downloadFile = (url: string, path: string, options: Omit<RNFS.Downl
   return RNFS.downloadFile({
     fromUrl: url, // URL to download file from
     toFile: path, // Local filesystem path to save the file to
+    connectionTimeout: DOWNLOAD_TIMEOUT,
+    readTimeout: DOWNLOAD_TIMEOUT,
     ...options,
     // headers: options.headers, // An object of headers to be passed to the server
     // // background?: boolean;     // Continue the download in the background after the app terminates (iOS only)
@@ -84,8 +95,6 @@ export const downloadFile = (url: string, path: string, options: Omit<RNFS.Downl
     // begin: (res: DownloadBeginCallbackResult) => void;
     // progress?: (res: DownloadProgressCallbackResult) => void;
     // // resumable?: () => void;    // only supported on iOS yet
-    // connectionTimeout?: number // only supported on Android yet
-    // readTimeout?: number       // supported on Android and iOS
     // // backgroundTimeout?: number // Maximum time (in milliseconds) to download an entire resource (iOS only, useful for timing out background downloads)
   })
 }

@@ -532,6 +532,11 @@ export const getUserApiList = async(): Promise<LX.UserApi.UserApiInfo[]> => {
   }
   if (updated) void saveData(userApiPrefix, userApis)
 
+  // 清理上次「重新拉取」在"写 pending 与提交之间"被中断留下的残留
+  await Promise.all(userApis.map(async(info) => {
+    await removeData(`${userApiPrefix}${info.id}__pending`).catch(() => {})
+  }))
+
   return [...userApis]
 }
 export const getUserApiScript = async(id: string): Promise<string> => {
@@ -642,6 +647,20 @@ export const restoreUserApiScript = async(id: string): Promise<LX.UserApi.UserAp
 export const getUserApiScriptPrev = async(id: string): Promise<string | null> => {
   return await getData<string>(`${userApiPrefix}${id}__prev`) ?? null
 }
+/**
+ * 待验证脚本：重新拉取时先写到这里，用它试跑成功后才覆盖正式脚本，
+ * 避免"新脚本写进去但初始化失败"把可用的源写坏。
+ */
+const getUserApiPendingKey = (id: string) => `${userApiPrefix}${id}__pending`
+export const saveUserApiScriptPending = async(id: string, script: string) => {
+  await saveData(getUserApiPendingKey(id), script)
+}
+export const getUserApiScriptPending = async(id: string): Promise<string | null> => {
+  return await getData<string>(getUserApiPendingKey(id)) ?? null
+}
+export const clearUserApiScriptPending = async(id: string) => {
+  await removeData(getUserApiPendingKey(id)).catch(() => {})
+}
 export const removeUserApi = async(ids: string[]) => {
   if (!userApis) return []
   const _ids: string[] = []
@@ -649,6 +668,7 @@ export const removeUserApi = async(ids: string[]) => {
     if (ids.includes(userApis[index].id)) {
       _ids.push(`${userApiPrefix}${userApis[index].id}`)
       _ids.push(`${userApiPrefix}${userApis[index].id}__prev`)
+      _ids.push(`${userApiPrefix}${userApis[index].id}__pending`)
       userApis.splice(index, 1)
       ids.splice(index, 1)
     }

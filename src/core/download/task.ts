@@ -5,8 +5,10 @@ import { getDownloadDir } from '@/core/downloadPath'
 import {
   copyFile,
   downloadFile,
+  moveFile,
   readFileSlice,
   scanFile,
+  stopDownload,
   temporaryDirectoryPath,
   unlink,
   writeFile,
@@ -28,6 +30,14 @@ const HEADER_BYTES = 16
 const MAX_AUDIO_RETRY = 2
 /** 两次下载尝试之间的间隔 */
 const AUDIO_RETRY_DELAY = 1000
+/**
+ * 无字节增长多久判定为"卡死"。
+ *
+ * 原生连接超时（见 utils/fs.ts 的 DOWNLOAD_TIMEOUT）只能覆盖"建连/读不到数据"，
+ * 服务端间歇性发几个字节就能让它永远续命；这里按"进度停滞后多久放弃"兜底。
+ */
+const STALL_TIMEOUT = 60_000
+const WATCHDOG_INTERVAL = 5_000
 
 export interface RunTaskHandlers {
   onProgress?: (info: LX.Download.ProgressInfo) => void
@@ -213,7 +223,19 @@ const prepareCover = async(musicInfo: LX.Music.MusicInfoOnline): Promise<string 
   try {
     const url = await withTimeout(getPicPath({ musicInfo }), INFO_TIMEOUT)
     if (!url) return null
-    const result = await withTimeout(downloadFile(url, rawPath).promise, INFO_TIMEOUT)
+    const download = downloadFile(url, rawPath)
+    let result: { statusCode: number }
+    try {
+      result = await withTimeout(download.promise, INFO_TIMEOUT)
+    } catch (error) {
+      // 超时后原生任务仍在往临时文件里写，必须显式停止，否则连接与临时文件都会悬挂
+      try {
+        stopDownload(download.jobId)
+      } catch (stopError) {
+        log.error('stop cover download failed', stopError)
+      }
+      throw error
+    }
     if (result.statusCode != 200) throw new Error(`cover statusCode: ${result.statusCode}`)
     const compressed = await compressImage(rawPath, coverPath)
     // 压缩模块在「原图已经足够小」时会直接返回原图路径，而原图在函数结束时会被删除，
@@ -322,10 +344,12 @@ export const runDownloadTask = async(
 
       lastBytes = 0
       lastTime = Date.now()
+      let lastActivityAt = Date.now()
       await unlink(tmpPath).catch(() => {})
       const download = downloadFile(negotiated.url, tmpPath, {
         progressInterval: PROGRESS_INTERVAL,
         progress: ({ bytesWritten, contentLength }) => {
+          lastActivityAt = Date.now()
           const now = Date.now()
           const elapsed = Math.max(1, now - lastTime)
           const bytesPerSecond = Math.max(1, (bytesWritten - lastBytes) * 1000 / elapsed)
@@ -341,7 +365,29 @@ export const runDownloadTask = async(
       })
       handlers.onJobCreated?.(download.jobId)
 
-      const result = await download.promise
+      // 看门狗：进度长时间不推进时主动中断，避免任务永久占着并发槽位
+      let isStalled = false
+      const watchdog = setInterval(() => {
+        if (Date.now() - lastActivityAt < STALL_TIMEOUT) return
+        isStalled = true
+        clearInterval(watchdog)
+        log.error('download stalled, abort', musicInfo.source, musicInfo.id, negotiated.quality)
+        try {
+          stopDownload(download.jobId)
+        } catch (error) {
+          log.error('stop stalled download failed', error)
+        }
+      }, WATCHDOG_INTERVAL)
+
+      let result: { statusCode: number }
+      try {
+        result = await download.promise
+      } catch (error) {
+        if (isStalled) throw new Error(global.i18n.t('download_task_stalled'))
+        throw error
+      } finally {
+        clearInterval(watchdog)
+      }
       throwIfCancelled()
       lastStatus = result.statusCode
       if (result.statusCode == 200) break
@@ -411,9 +457,22 @@ export const runDownloadTask = async(
       toast(global.i18n.t('download_task_attach_failed', { what: failedAttaches.join(' / ') }), 'short')
     }
 
-    // 落盘：同名旧文件静默覆盖
-    await unlink(filePath).catch(() => {})
-    await copyFile(taggedPath, filePath)
+    // 落盘：先写同目录临时文件，再替换目标。
+    // 不能"先删目标再拷贝"——拷贝失败会把用户已有的同名文件一起毁掉。
+    const stagingPath = `${filePath}.lxpart`
+    try {
+      await unlink(stagingPath).catch(() => {})
+      await copyFile(taggedPath, stagingPath)
+      await unlink(filePath).catch(() => {})
+      try {
+        await moveFile(stagingPath, filePath)
+      } catch (error) {
+        log.error('rename downloaded file failed, fallback to copy', error)
+        await copyFile(stagingPath, filePath)
+      }
+    } finally {
+      await unlink(stagingPath).catch(() => {})
+    }
     await unlink(tmpPath).catch(() => {})
     await scanFile(filePath).catch(() => {})
 

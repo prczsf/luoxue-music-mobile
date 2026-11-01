@@ -43,13 +43,61 @@ const handleGetData = async<T>(partKeys: string): Promise<T> => {
   })
 }
 
+/**
+ * 从已存储的根键值里解析出它引用的分片键。
+ * 读取路径只认根键里的索引数组，因此"新值写成功后再清理旧分片"是安全的：
+ * 清理失败最多留下无法被索引到的孤儿分片，不会影响数据一致性。
+ */
+const getPartKeysOfValue = (value: string | null): string[] => {
+  if (!value) return []
+  if (partKeyPrefixRxp.test(value)) return value.replace(partKeyPrefixRxp, '').split(keySplit)
+  if (partKeyArrPrefixRxp.test(value)) {
+    try {
+      return JSON.parse(value.replace(partKeyArrPrefixRxp, '')) as string[]
+    } catch {
+      return []
+    }
+  }
+  return []
+}
+
+/**
+ * 在写入前快照这些键当前引用的分片键。
+ *
+ * 必须"先快照"：写入之后根键已经变成新值，此时再解析只会拿到新分片键，
+ * 拿去清理就会把刚写进去的数据删掉（这正是旧实现 `removeData` → `multiSet` 之外的另一半坑）。
+ */
+const snapshotPartKeys = async(keys: string[]): Promise<string[]> => {
+  if (!keys.length) return []
+  const datas = await AsyncStorage.multiGet(keys)
+  const partKeys: string[] = []
+  for (const [, value] of datas) partKeys.push(...getPartKeysOfValue(value))
+  return partKeys
+}
+
+/** 清理不再被新数据引用的旧分片；失败只记日志，不影响已写入的数据 */
+const cleanupPartKeys = async(oldPartKeys: string[], newDatas: Array<[string, string]>) => {
+  if (!oldPartKeys.length) return
+  const newKeys = new Set(newDatas.map(([key]) => key))
+  const staleKeys = oldPartKeys.filter(key => !newKeys.has(key))
+  if (!staleKeys.length) return
+  try {
+    await AsyncStorage.multiRemove(staleKeys)
+  } catch (e: any) {
+    log.error('storage error[cleanup parts]:', e.message)
+  }
+}
+
 export const saveData = async(key: string, value: any) => {
   const datas: Array<[string, string]> = []
   buildData(key, value, datas)
 
   try {
-    await removeData(key)
+    // 先快照旧分片 → 再原子写入新值 → 最后回收旧分片。
+    // 顺序不能反：multiSet 失败时旧数据必须原封不动。
+    const oldPartKeys = await snapshotPartKeys([key])
     await AsyncStorage.multiSet(datas)
+    await cleanupPartKeys(oldPartKeys, datas)
   } catch (e: any) {
     // saving error
     log.error('storage error[saveData]:', key, e.message)
@@ -160,8 +208,10 @@ export const saveDataMultiple = async(datas: Array<[string, any]>) => {
     buildData(key, value, allData)
   }
   try {
-    await removeDataMultiple(datas.map(k => k[0]))
+    // 与 saveData 同样的顺序约束：先快照、再原子写入、最后回收旧分片
+    const oldPartKeys = await snapshotPartKeys(datas.map(([key]) => key))
     await AsyncStorage.multiSet(allData)
+    await cleanupPartKeys(oldPartKeys, allData)
   } catch (e: any) {
     // save error
     log.error('storage error[saveDataMultiple]:', e.message)
