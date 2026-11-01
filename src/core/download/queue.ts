@@ -144,8 +144,22 @@ export const cancelTask = (id: string) => {
   startPending()
 }
 
+/**
+ * 全部取消：一次性停止所有运行中的任务再整体清空。
+ *
+ * 不能逐个调 cancelTask——它每次都会 startPending()，
+ * 结果是"取消第 1 个 → 立刻启动第 2 个（发起真实请求）→ 再把它取消"，
+ * 批量取消 N 个会产生 N 次无效建连与 N 次写盘。
+ */
 export const cancelAll = () => {
-  for (const task of [...state.tasks]) cancelTask(task.id)
+  if (!state.tasks.length) return
+  for (const job of running.values()) {
+    job.jobIds.forEach(jobId => { stopDownload(jobId) })
+  }
+  running.clear()
+  state.tasks.splice(0, state.tasks.length)
+  event.updated()
+  persistTasks()
 }
 
 export const clearCompleted = () => {

@@ -99,11 +99,16 @@ export const getStatus = (): RoamingStatus => {
 const backfill = async(count: number) => {
   if (!session || session.refillFailed) return
   if (session.isRefilling) return
+  // 捕获当前会话：续杯是异步的，期间可能已经 stop()/重新 start()，
+  // 那种情况下这批歌属于上一次会话，必须整批丢弃，否则会写进新窗口
+  const current = session
+  const isStale = () => session !== current
   session.isRefilling = true
   try {
     let list: LX.Music.MusicInfo[] = []
     for (let attempt = 0; attempt < 2 && list.length < count; attempt++) {
-      const sampled = await session.sampler.refill(count - list.length)
+      const sampled = await current.sampler.refill(count - list.length)
+      if (isStale()) return
       if (!sampled.length) break
       // 指纹判重：窗口已有的、本批内重复的都不再入窗（本地/在线同曲不同 id 视为同一首）
       const batchFingerprints = new Set<string>()
@@ -114,16 +119,17 @@ const backfill = async(count: number) => {
         list.push(musicInfo)
       }
     }
+    if (isStale()) return
     if (list.length) {
       arrPush(window_, list)
       syncWindowFingerprints()
       notify()
-    } else if (!session.refillFailed) {
-      session.refillFailed = true
+    } else if (!current.refillFailed) {
+      current.refillFailed = true
       toast(global.i18n.t('roaming_refill_failed'))
     }
   } finally {
-    session && (session.isRefilling = false)
+    current.isRefilling = false
   }
 }
 

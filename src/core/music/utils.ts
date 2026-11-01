@@ -227,10 +227,13 @@ const MAX_OTHER_SOURCE_ATTEMPTS = 6
 const URL_REQUEST_TIMEOUT = 8000
 
 /** 一次取地址（含同源音质阶梯、跨源搜索、跨源重试）的总时间预算（ADR 0009 不变式③） */
-const URL_RESOLVE_BUDGET = 12_000
+export const URL_RESOLVE_BUDGET = 12_000
 
-/** 创建一个"剩余时间"取函数，用于在整条取地址链路上共享同一份时间预算 */
-const createRemainTime = (budget: number) => {
+/**
+ * 创建一个"剩余时间"取函数，用于在整条取地址链路上共享同一份时间预算。
+ * 导出给播放层：整链重跑必须复用同一份预算，否则最坏耗时会翻倍。
+ */
+export const createRemainTime = (budget: number) => {
   const end = Date.now() + budget
   return () => end - Date.now()
 }
@@ -274,11 +277,13 @@ export const getOnlineOtherSourceMusicUrl = async({ musicInfos, quality, onToggl
   if (!await global.lx.apiInitPromise[0]) throw new Error('source init failed')
 
   const remainTime = getRemainTime ?? createRemainTime(URL_RESOLVE_BUDGET)
+  // 复制一份再 shift：调用方可能传的是缓存里的数组，变异入参会把缓存清空
+  const candidates = [...musicInfos]
 
   let attempts = MAX_OTHER_SOURCE_ATTEMPTS
   let musicInfo: LX.Music.MusicInfoOnline | null = null
   // eslint-disable-next-line no-cond-assign
-  while (musicInfo = (musicInfos.shift()!)) {
+  while (musicInfo = (candidates.shift()!)) {
     if (retryedSource.includes(musicInfo.source)) continue
     retryedSource.push(musicInfo.source)
     if (!assertApiSupport(musicInfo.source)) continue
@@ -328,12 +333,14 @@ export const getOnlineOtherSourceMusicUrl = async({ musicInfos, quality, onToggl
 /**
  * 获取在线音乐URL
  */
-export const handleGetOnlineMusicUrl = async({ musicInfo, quality, onToggleSource, isRefresh, allowToggleSource }: {
+export const handleGetOnlineMusicUrl = async({ musicInfo, quality, onToggleSource, isRefresh, allowToggleSource, getRemainTime }: {
   musicInfo: LX.Music.MusicInfoOnline
   quality?: LX.Quality
   isRefresh: boolean
   allowToggleSource: boolean
   onToggleSource: (musicInfo?: LX.Music.MusicInfoOnline) => void
+  /** 与调用方共享同一份取地址时间预算；不传则本次调用自己开一份 */
+  getRemainTime?: () => number
 }): Promise<{
   url: string
   musicInfo: LX.Music.MusicInfoOnline
@@ -354,7 +361,7 @@ export const handleGetOnlineMusicUrl = async({ musicInfo, quality, onToggleSourc
     if (cachedItem) return { musicInfo, url: cachedItem.url, quality: cachedItem.quality, isFromCache: true }
   }
 
-  const remainTime = createRemainTime(URL_RESOLVE_BUDGET)
+  const remainTime = getRemainTime ?? createRemainTime(URL_RESOLVE_BUDGET)
   let lastError: any = null
   for (const targetQuality of targetQualitys) {
     const remain = remainTime()

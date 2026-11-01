@@ -90,6 +90,9 @@ export const filterMusicList = ({ playedList, listId, list, playerMusicInfo, dis
       playerIndex = (filteredList.length ? filteredList : canPlayList).findIndex(m => m.id == playerMusicInfo.id)
     }
   }
+  // 候选为空时下标没有意义：统一归一到 -1，避免留下"指向不存在元素"的残留值
+  if (!filteredList.length) playerIndex = -1
+
   return {
     filteredList,
     canPlayList,
@@ -121,7 +124,7 @@ export const filterList = async({ playedList, listId, list, playerMusicInfo, isN
 
   if (!filteredList.length && playedList.length) {
     clearPlayedList()
-    return { filteredList: canPlayList, playerIndex }
+    return { filteredList: canPlayList, playerIndex: canPlayList.length ? playerIndex : -1 }
   }
   return { filteredList, playerIndex }
 }

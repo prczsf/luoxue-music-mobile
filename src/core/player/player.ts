@@ -20,6 +20,7 @@ import {
   removeTempPlayList,
 } from '@/core/player/tempPlayList'
 import { getMusicUrl, getPicPath, getLyricInfo } from '@/core/music'
+import { URL_RESOLVE_BUDGET, createRemainTime } from '@/core/music/utils'
 import { requestMsg } from '@/utils/message'
 import { getRandom } from '@/utils/common'
 import { filterList } from './utils'
@@ -37,9 +38,12 @@ import { addDislikeInfo, hasDislike } from '@/core/dislikeList'
  * 区分「全部命中屏蔽规则」与「没有可播放的歌曲（源失效 / 已播完）」，
  * 避免用户点播放后像什么都没发生（旧行为是静默停止，车机上尤其像卡死）。
  */
+/** 判定"是否全部命中屏蔽"时最多扫描的条数：万首列表逐条匹配会阻塞主线程 */
+const TIP_SCAN_LIMIT = 500
 const showNoPlayableTip = (list: Array<LX.Music.MusicInfo | LX.Download.ListItem>) => {
   if (!list.length) return
-  const isAllBlocked = list.every(musicInfo => hasDislike('progress' in musicInfo ? musicInfo.metadata.musicInfo : musicInfo))
+  const sample = list.length > TIP_SCAN_LIMIT ? list.slice(0, TIP_SCAN_LIMIT) : list
+  const isAllBlocked = sample.every(musicInfo => hasDislike('progress' in musicInfo ? musicInfo.metadata.musicInfo : musicInfo))
   toast(global.i18n.t(isAllBlocked ? 'player_all_music_disliked_tip' : 'player_no_playable_music_tip'))
 }
 
@@ -109,7 +113,14 @@ const delayRetry = async(musicInfo: LX.Music.MusicInfo | LX.Download.ListItem, i
     }
   })
 }
-const getMusicPlayUrl = async(musicInfo: LX.Music.MusicInfo | LX.Download.ListItem, isRefresh = false, isRetryed = false): Promise<string | null> => {
+const getMusicPlayUrl = async(
+  musicInfo: LX.Music.MusicInfo | LX.Download.ListItem,
+  isRefresh = false,
+  isRetryed = false,
+  /** 整链重跑必须复用同一份预算，否则最坏耗时从 12s 变成 24s */
+  getRemainTime?: () => number,
+): Promise<string | null> => {
+  const remainTime = getRemainTime ?? createRemainTime(URL_RESOLVE_BUDGET)
   // this.musicInfo.url = await getMusicPlayUrl(targetSong, type)
   setStatusText(global.i18n.t('player__getting_url'))
   addLoadTimeout()
@@ -121,10 +132,12 @@ const getMusicPlayUrl = async(musicInfo: LX.Music.MusicInfo | LX.Download.ListIt
     musicInfo: toggleMusicInfo,
     isRefresh,
     allowToggleSource: false,
+    getRemainTime: remainTime,
   }) : Promise.reject(new Error('not found'))).catch(async() => {
     return getMusicUrl({
       musicInfo,
       isRefresh,
+      getRemainTime: remainTime,
       onToggleSource(mInfo) {
         if (diffCurrentMusicInfo(musicInfo)) return
         setStatusText(global.i18n.t('toggle_source_try'))
@@ -146,7 +159,7 @@ const getMusicPlayUrl = async(musicInfo: LX.Music.MusicInfo | LX.Download.ListIt
     // - 换源穷尽是确定性结论（isSourceExhaustedError），再跑一遍只会把失败路径翻倍
     // - 取址预算耗尽（requestMsg.timeout）重跑会把 12s 预算变成 24s；而 withTimeout 无法取消
     //   底层请求（用户脚本请求没有可用的 cancel），重跑多数只是把同一个慢请求再发一遍
-    if (!isRetryed && !isSourceExhaustedError(err) && err.message != requestMsg.timeout) return getMusicPlayUrl(musicInfo, isRefresh, true)
+    if (!isRetryed && !isSourceExhaustedError(err) && err.message != requestMsg.timeout) return getMusicPlayUrl(musicInfo, isRefresh, true, remainTime)
 
     throw err
   })
@@ -300,6 +313,8 @@ export const playListById = async(listId: string, id: string) => {
   let list = getList(listId)
   if (!list.length) {
     list = await getListMusics(listId)
+    // 加载期间用户可能已经切到别的列表：此时不能再把旧列表的歌塞进当前播放位
+    if (playerState.playInfo.playerListId !== listId) return
   }
   const musicInfo = list.find(m => m.id == id)
   if (!musicInfo) return
@@ -320,6 +335,8 @@ export const playList = async(listId: string, index: number) => {
   let list = getList(listId)
   if (!list.length) {
     list = await getListMusics(listId)
+    // 同上：异步加载回来后必须复核当前列表仍是这次要播的列表
+    if (playerState.playInfo.playerListId !== listId) return
   }
   const musicInfo = list[index]
   if (!musicInfo) return
@@ -348,7 +365,11 @@ export const resetRandomNextMusicInfo = () => {
   }
 }
 
-export const getNextPlayMusicInfo = async(): Promise<LX.Player.PlayMusicInfo | null> => {
+/**
+ * 取下一首待播歌曲。
+ * @param silent 预取等后台调用传 true：此时不该向用户弹"没有可播放的歌曲"（歌还没播完）
+ */
+export const getNextPlayMusicInfo = async(silent = false): Promise<LX.Player.PlayMusicInfo | null> => {
   if (playerState.tempPlayList.length) { // 如果稍后播放列表存在歌曲则直接播放改列表的歌曲
     const playMusicInfo = playerState.tempPlayList[0]
     return playMusicInfo
@@ -372,7 +393,7 @@ export const getNextPlayMusicInfo = async(): Promise<LX.Player.PlayMusicInfo | n
       const musicInfo = roamingList[i]
       if (musicInfo && !hasDislike(musicInfo) && !isMusicInvalid(musicInfo)) return { musicInfo, listId: currentListId, isTempPlay: false }
     }
-    if (roamingList.length > playInfo.playerPlayIndex + 1) showNoPlayableTip(roamingList.slice(playInfo.playerPlayIndex + 1))
+    if (!silent && roamingList.length > playInfo.playerPlayIndex + 1) showNoPlayableTip(roamingList.slice(playInfo.playerPlayIndex + 1))
     return null
   }
 
