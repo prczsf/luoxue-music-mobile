@@ -695,5 +695,16 @@
   "roaming_hotmix_explore": "探索",
   "roaming_artist_search_failed": "連網找歌沒成功，繼續播已有的歌",
   "roaming_queue_title": "播放清單 · {index}/{total}",
-  "roaming_source_label": "漫遊 · {name}"
+  "roaming_source_label": "漫遊 · {name}",
+  "player_network_error_pause_tip": "連續多首歌曲網路異常，已暫停自動切換",
+  "list_clean_unplayable": "清理失效歌曲",
+  "list_clean_unplayable_title": "{name} · 多次無法播放 ({num})",
+  "list_clean_unplayable_empty": "暫無累計播放失敗達到 {count} 次的歌曲",
+  "list_clean_unplayable_count": "失敗 {count} 次",
+  "list_clean_unplayable_select_all": "全選",
+  "list_clean_unplayable_deselect_all": "取消全選",
+  "list_clean_unplayable_remove_btn": "移除所選 ({num})",
+  "list_clean_unplayable_done": "已從歌單移除 {num} 首歌曲",
+  "setting_play_pause_on_remote_stop": "收到停止指令時僅暫停（車機防誤退）",
+  "setting_play_pause_on_remote_stop_tip": "開啟後，收到車機切音源/藍牙斷連等媒體停止指令時只暫停播放而不退出應用；手機日常使用建議關閉，以便滑掉通知欄即可退出。"
 }

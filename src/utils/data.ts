@@ -363,7 +363,9 @@ export const clearMusicUrlByMusic = async(musicInfo: LX.Music.MusicInfo) => {
   await removeDataMultiple(qualitys.map(q => getMusicUrlKey(musicInfo, q as LX.Quality)))
 }
 export const saveMusicUrl = async(musicInfo: LX.Music.MusicInfo, type: LX.Quality, url: string) => {
-  const item: MusicUrlCacheItem = { url, quality: type, time: Date.now() }
+  const cleanUrl = typeof url === 'string' ? url.trim() : ''
+  if (!cleanUrl) return
+  const item: MusicUrlCacheItem = { url: cleanUrl, quality: type, time: Date.now() }
   return saveData(getMusicUrlKey(musicInfo, type), item)
 }
 export const clearMusicUrl = async(keys?: string[]) => {

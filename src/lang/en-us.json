@@ -695,5 +695,16 @@
   "roaming_hotmix_explore": "Explore",
   "roaming_artist_search_failed": "Couldn't find more songs online — keeping what we have",
   "roaming_queue_title": "Up Next · {index}/{total}",
-  "roaming_source_label": "Roaming · {name}"
+  "roaming_source_label": "Roaming · {name}",
+  "player_network_error_pause_tip": "Multiple consecutive network errors. Auto-skip paused.",
+  "list_clean_unplayable": "Clean Unplayable Songs",
+  "list_clean_unplayable_title": "{name} · Unplayable ({num})",
+  "list_clean_unplayable_empty": "No songs have failed playback {count}+ times",
+  "list_clean_unplayable_count": "Failed {count}x",
+  "list_clean_unplayable_select_all": "Select All",
+  "list_clean_unplayable_deselect_all": "Deselect All",
+  "list_clean_unplayable_remove_btn": "Remove Selected ({num})",
+  "list_clean_unplayable_done": "Removed {num} songs from playlist",
+  "setting_play_pause_on_remote_stop": "Pause instead of exit on Remote Stop (Head unit mode)",
+  "setting_play_pause_on_remote_stop_tip": "When enabled, media STOP commands (e.g. car head unit switching audio source) pause playback instead of exiting the app. Keep off on phones so swiping the notification exits normally."
 }

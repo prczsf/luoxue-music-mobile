@@ -24,6 +24,7 @@ export interface ListMenuProps {
   onRename: (listInfo: LX.List.UserListInfo) => void
   onSort: (listInfo: LX.List.MyListInfo) => void
   onDuplicateMusic: (listInfo: LX.List.MyListInfo) => void
+  onCleanFailureMusic?: (listInfo: LX.List.MyListInfo) => void
   onImport: (listInfo: LX.List.MyListInfo, index: number) => void
   onExport: (listInfo: LX.List.MyListInfo, index: number) => void
   onSync: (listInfo: LX.List.UserListInfo) => void
@@ -50,6 +51,7 @@ export default forwardRef<ListMenuType, ListMenuProps>(({
   onRename,
   onSort,
   onDuplicateMusic,
+  onCleanFailureMusic,
   onImport,
   onExport,
   onSync,
@@ -106,6 +108,12 @@ export default forwardRef<ListMenuType, ListMenuProps>(({
           icon: 'help',
           handler: () => { handleClose(); onDuplicateMusic(listInfo) },
         },
+        ...(onCleanFailureMusic ? [{
+          key: 'cleanFailureMusic',
+          label: t('list_clean_unplayable'),
+          icon: 'remove',
+          handler: () => { handleClose(); onCleanFailureMusic(listInfo) },
+        }] : []),
         {
           key: 'local_file',
           label: t('list_select_local_file'),
@@ -152,6 +160,12 @@ export default forwardRef<ListMenuType, ListMenuProps>(({
         icon: 'help',
         handler: () => { handleClose(); onDuplicateMusic(listInfo) },
       },
+      ...(onCleanFailureMusic ? [{
+        key: 'cleanFailureMusic',
+        label: t('list_clean_unplayable'),
+        icon: 'remove',
+        handler: () => { handleClose(); onCleanFailureMusic(listInfo) },
+      }] : []),
     ]
 
     if (canSync) {

@@ -59,7 +59,7 @@ export const getMusicUrl = async({ musicInfo, quality, isRefresh, allowToggleSou
   if (!isRefresh) {
     const qualitys = quality ? [quality] : getTryQualitys(settingState.setting['player.playQuality'], musicInfo, global.lx.qualityList)
     const cachedUrl = await getStoreMusicUrl(musicInfo, qualitys)
-    if (cachedUrl) return cachedUrl.url
+    if (cachedUrl?.url?.trim()) return cachedUrl.url.trim()
   }
 
   return handleGetOnlineMusicUrl({ musicInfo, quality, onToggleSource, isRefresh, allowToggleSource, getRemainTime }).then(({ url, quality: targetQuality, musicInfo: targetMusicInfo, isFromCache }) => {

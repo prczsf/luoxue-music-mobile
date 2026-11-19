@@ -202,6 +202,11 @@ declare global {
       'player.isShowBluetoothFullLyric': boolean
 
       /**
+       * 收到远程停止指令（如车机切音源/蓝牙断开）时仅暂停而非退出应用
+       */
+      'player.isPauseOnRemoteStop': boolean
+
+      /**
        * 播放详情页-是否缩放当前播放的歌词行
        */
       // 'playDetail.isZoomActiveLrc': boolean

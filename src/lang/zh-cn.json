@@ -695,5 +695,16 @@
   "roaming_hotmix_explore": "探索",
   "roaming_artist_search_failed": "联网找歌没成功，继续播已有的歌",
   "roaming_queue_title": "播放列表 · {index}/{total}",
-  "roaming_source_label": "漫游 · {name}"
+  "roaming_source_label": "漫游 · {name}",
+  "player_network_error_pause_tip": "连续多首歌曲网络异常，已暂停自动切换",
+  "list_clean_unplayable": "清理失效歌曲",
+  "list_clean_unplayable_title": "{name} · 多次无法播放 ({num})",
+  "list_clean_unplayable_empty": "暂无累计播放失败达到 {count} 次的歌曲",
+  "list_clean_unplayable_count": "失败 {count} 次",
+  "list_clean_unplayable_select_all": "全选",
+  "list_clean_unplayable_deselect_all": "取消全选",
+  "list_clean_unplayable_remove_btn": "移除所选 ({num})",
+  "list_clean_unplayable_done": "已从歌单移除 {num} 首歌曲",
+  "setting_play_pause_on_remote_stop": "收到停止指令时仅暂停（车机防误退）",
+  "setting_play_pause_on_remote_stop_tip": "开启后，收到车机切音源/蓝牙断连等媒体停止指令时只暂停播放而不退出应用；手机日常使用建议关闭，以便划掉通知栏即可退出。"
 }

@@ -24,8 +24,10 @@ import { URL_RESOLVE_BUDGET, createRemainTime } from '@/core/music/utils'
 import { requestMsg } from '@/utils/message'
 import { getRandom } from '@/utils/common'
 import { filterList } from './utils'
-import { isMusicInvalid, markMusicInvalid, unmarkMusicInvalid } from './invalidMusic'
+import { clearInvalidMusic, isMusicInvalid, markMusicInvalid, unmarkMusicInvalid } from './invalidMusic'
 import { isSourceExhaustedError, isTransientUrlError } from './urlError'
+import { cancelDelayNext, scheduleDelayNext } from './delayNext'
+import { recordPlayFailure } from './playFailureStats'
 import BackgroundTimer from 'react-native-background-timer'
 import { checkIgnoringBatteryOptimization, checkNotificationPermission, debounceBackgroundTimer, toast } from '@/utils/tools'
 import { LIST_IDS } from '@/config/constant'
@@ -74,9 +76,22 @@ const createDelayNextTimeout = (delay: number) => {
     addDelayNextTimeout,
   }
 }
-// 取址失败后切下一首前的等待：只为让失败状态可见，不再白等 5s（ADR 0009 不变式④）
-const { addDelayNextTimeout, clearDelayNextTimeout } = createDelayNextTimeout(2000)
+// 取址失败后切下一首前的等待：与 playerEvent 共用同一计时器实例，避免双计时器抢跑（ADR 0009 不变式④）
+const addDelayNextTimeout = () => {
+  scheduleDelayNext(() => {
+    if (global.lx.isPlayedStop) return
+    console.log('delay next timeout timeout', 2000)
+    void playNext(true)
+  }, 2000)
+}
 const { addDelayNextTimeout: addLoadTimeout, clearDelayNextTimeout: clearLoadTimeout } = createDelayNextTimeout(100000)
+
+const MAX_CONSECUTIVE_TRANSIENT_ERRORS = 5
+let consecutiveTransientErrors = 0
+
+export const resetConsecutiveTransientErrors = () => {
+  consecutiveTransientErrors = 0
+}
 
 const createGettingUrlId = (musicInfo: LX.Music.MusicInfo | LX.Download.ListItem) => {
   const tInfo = 'progress' in musicInfo ? musicInfo.metadata.musicInfo.meta.toggleMusicInfo : musicInfo.meta.toggleMusicInfo
@@ -92,6 +107,11 @@ const diffCurrentMusicInfo = (curMusicInfo: LX.Music.MusicInfo | LX.Download.Lis
 
 
 let cancelDelayRetry: (() => void) | null = null
+export const cancelPendingAutoToggle = () => {
+  cancelDelayNext()
+  if (cancelDelayRetry) cancelDelayRetry()
+  global.lx.gettingUrlId = ''
+}
 const delayRetry = async(musicInfo: LX.Music.MusicInfo | LX.Download.ListItem, isRefresh = false): Promise<string | null> => {
   // if (cancelDelayRetry) cancelDelayRetry()
   return new Promise<string | null>((resolve, reject) => {
@@ -145,6 +165,7 @@ const getMusicPlayUrl = async(
     })
   }).then(url => {
     if (global.lx.isPlayedStop || diffCurrentMusicInfo(musicInfo)) return null
+    if (!url?.trim()) throw new Error('empty music url')
 
     return url
   }).catch(async err => {
@@ -171,16 +192,32 @@ export const setMusicUrl = (musicInfo: LX.Music.MusicInfo | LX.Download.ListItem
   if (cancelDelayRetry) cancelDelayRetry()
   global.lx.gettingUrlId = createGettingUrlId(musicInfo)
   void getMusicPlayUrl(musicInfo, isRefresh).then((url) => {
-    if (!url) return
+    if (url == null) return
     unmarkMusicInvalid(musicInfo)
+    consecutiveTransientErrors = 0
     setResource(musicInfo, url, playerState.progress.nowPlayTime)
-  }).catch((err: any) => {
+  }).catch((err: unknown) => {
+    if (global.lx.isPlayedStop || diffCurrentMusicInfo(musicInfo)) return
     console.log(err)
-    setStatusText(err.message as string)
+    const errMsg = err instanceof Error ? err.message : ''
+    setStatusText(errMsg)
     global.app_event.error()
-    // 源已穷尽（或非临时故障）时只做"本次运行内不可播放"标记，由播放过滤跳过；
-    // 绝不动用户列表——列表即用户数据，删除会立即写库且不可撤销
-    if (isSourceExhaustedError(err) || !isTransientUrlError(err)) markMusicInvalid(musicInfo)
+    // 源已穷尽（或非临时故障）时做"本次运行内不可播放"标记并累计持久化失败次数；
+    // 绝不动用户列表——列表即用户数据，删除只能由用户在清理入口确认（ADR 0006）
+    if (isSourceExhaustedError(err) || !isTransientUrlError(err)) {
+      consecutiveTransientErrors = 0
+      markMusicInvalid(musicInfo)
+      void recordPlayFailure(musicInfo, errMsg || 'source error')
+      addDelayNextTimeout()
+      return
+    }
+    consecutiveTransientErrors++
+    if (consecutiveTransientErrors >= MAX_CONSECUTIVE_TRANSIENT_ERRORS) {
+      consecutiveTransientErrors = 0
+      toast(global.i18n.t('player_network_error_pause_tip'))
+      void handleToggleStop(false)
+      return
+    }
     addDelayNextTimeout()
   }).finally(() => {
     if (musicInfo === playerState.playMusicInfo.musicInfo) {
@@ -293,7 +330,7 @@ const handlePlay = async() => {
   await setStop()
   global.app_event.pause()
 
-  clearDelayNextTimeout()
+  cancelDelayNext()
   clearLoadTimeout()
 
 
@@ -308,6 +345,8 @@ const handlePlay = async() => {
  * @param id 歌曲id
  */
 export const playListById = async(listId: string, id: string) => {
+  consecutiveTransientErrors = 0
+  cancelPendingAutoToggle()
   const prevListId = playerState.playInfo.playerListId
   setPlayListId(listId)
   let list = getList(listId)
@@ -330,6 +369,8 @@ export const playListById = async(listId: string, id: string) => {
  * @param index 播放的歌曲位置
  */
 export const playList = async(listId: string, index: number) => {
+  consecutiveTransientErrors = 0
+  cancelPendingAutoToggle()
   const prevListId = playerState.playInfo.playerListId
   setPlayListId(listId)
   let list = getList(listId)
@@ -346,11 +387,13 @@ export const playList = async(listId: string, index: number) => {
   await handlePlay()
 }
 
-const handleToggleStop = async() => {
+const handleToggleStop = async(clearPlayInfo = false) => {
   await stop()
-  setTimeout(() => {
-    setPlayMusicInfo(null, null)
-  })
+  if (clearPlayInfo) {
+    setTimeout(() => {
+      setPlayMusicInfo(null, null)
+    })
+  }
 }
 
 
@@ -475,6 +518,10 @@ const handlePlayNext = async(playMusicInfo: LX.Player.PlayMusicInfo) => {
  * @returns
  */
 export const playNext = async(isAutoToggle = false): Promise<void> => {
+  if (!isAutoToggle) {
+    consecutiveTransientErrors = 0
+    cancelPendingAutoToggle()
+  }
   if (playerState.tempPlayList.length) { // 如果稍后播放列表存在歌曲则直接播放改列表的歌曲
     const playMusicInfo = playerState.tempPlayList[0]
     removeTempPlayList(0)
@@ -484,11 +531,11 @@ export const playNext = async(isAutoToggle = false): Promise<void> => {
 
   const playMusicInfo = playerState.playMusicInfo
   const playInfo = playerState.playInfo
-  if (playMusicInfo.musicInfo == null) return handleToggleStop()
+  if (playMusicInfo.musicInfo == null) return handleToggleStop(true)
 
   // console.log(playInfo.playerListId)
   const currentListId = playInfo.playerListId
-  if (!currentListId) return handleToggleStop()
+  if (!currentListId) return handleToggleStop(true)
   const currentList = getList(currentListId)
 
   // 漫游列表：恒取窗口内下一首（ADR 0003 §2），忽略随机/循环模式；尾部无歌 = 续杯失败，停在当前歌
@@ -544,9 +591,21 @@ export const playNext = async(isAutoToggle = false): Promise<void> => {
     isNext: true,
   })
 
+  if (!filteredList.length && !isAutoToggle && currentList.length) {
+    // 用户手动切下一首时若全表均因本次运行失效被跳过，允许清空会话失效标记重新尝试一轮
+    clearInvalidMusic()
+    ;({ filteredList, playerIndex } = await filterList({
+      listId: currentListId,
+      list: currentList,
+      playedList,
+      playerMusicInfo: currentList[playInfo.playerPlayIndex],
+      isNext: true,
+    }))
+  }
+
   if (!filteredList.length) {
     showNoPlayableTip(currentList)
-    return handleToggleStop()
+    return handleToggleStop(false)
   }
   // let currentIndex: number = filteredList.indexOf(currentList[playInfo.playerPlayIndex])
   if (playerIndex == -1 && filteredList.length) playerIndex = 0
@@ -591,12 +650,16 @@ export const playNext = async(isAutoToggle = false): Promise<void> => {
  * 上一曲
  */
 export const playPrev = async(isAutoToggle = false): Promise<void> => {
+  if (!isAutoToggle) {
+    consecutiveTransientErrors = 0
+    cancelPendingAutoToggle()
+  }
   const playMusicInfo = playerState.playMusicInfo
-  if (playMusicInfo.musicInfo == null) return handleToggleStop()
+  if (playMusicInfo.musicInfo == null) return handleToggleStop(true)
   const playInfo = playerState.playInfo
 
   const currentListId = playInfo.playerListId
-  if (!currentListId) return handleToggleStop()
+  if (!currentListId) return handleToggleStop(true)
   const currentList = getList(currentListId)
 
   const playedList = playerState.playedList
@@ -634,9 +697,19 @@ export const playPrev = async(isAutoToggle = false): Promise<void> => {
     playerMusicInfo: currentList[playInfo.playerPlayIndex],
     isNext: false,
   })
+  if (!filteredList.length && !isAutoToggle && currentList.length) {
+    clearInvalidMusic()
+    ;({ filteredList, playerIndex } = await filterList({
+      listId: currentListId,
+      list: currentList,
+      playedList,
+      playerMusicInfo: currentList[playInfo.playerPlayIndex],
+      isNext: false,
+    }))
+  }
   if (!filteredList.length) {
     showNoPlayableTip(currentList)
-    return handleToggleStop()
+    return handleToggleStop(false)
   }
 
   // let currentIndex = filteredList.indexOf(currentList[playInfo.playerPlayIndex])

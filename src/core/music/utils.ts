@@ -226,6 +226,14 @@ const MAX_OTHER_SOURCE_ATTEMPTS = 6
 /** 单次取地址请求的等待上限。脚本请求自身要 20s 才超时，这里提前放弃，把"卡住"变成"失败" */
 const URL_REQUEST_TIMEOUT = 8000
 
+/** 校验取址脚本返回结果：空串或非字符串一律视为取址失败，避免下游静默僵死 */
+const extractValidMusicUrl = (res: unknown): { url: string, type: LX.Quality } => {
+  const data = res as { url?: unknown, type?: LX.Quality } | null | undefined
+  const url = typeof data?.url === 'string' ? data.url.trim() : ''
+  if (!url) throw new Error('empty music url')
+  return { url, type: data!.type! }
+}
+
 /** 一次取地址（含同源音质阶梯、跨源搜索、跨源重试）的总时间预算（ADR 0009 不变式③） */
 export const URL_RESOLVE_BUDGET = 12_000
 
@@ -319,7 +327,7 @@ export const getOnlineOtherSourceMusicUrl = async({ musicInfos, quality, onToggl
         reqPromise = Promise.reject(err)
       }
       try {
-        const { url, type } = await withTimeout(reqPromise as Promise<{ url: string, type: LX.Quality }>, Math.min(remain, URL_REQUEST_TIMEOUT))
+        const { url, type } = extractValidMusicUrl(await withTimeout(reqPromise as Promise<{ url?: string, type: LX.Quality }>, Math.min(remain, URL_REQUEST_TIMEOUT)))
         return { musicInfo, url, quality: type, isFromCache: false }
       } catch (err: any) {
         if (err.message == requestMsg.tooManyRequests) throw err
@@ -377,7 +385,7 @@ export const handleGetOnlineMusicUrl = async({ musicInfo, quality, onToggleSourc
       reqPromise = Promise.reject(err)
     }
     try {
-      const { url, type } = await withTimeout(reqPromise as Promise<{ url: string, type: LX.Quality }>, Math.min(remain, URL_REQUEST_TIMEOUT))
+      const { url, type } = extractValidMusicUrl(await withTimeout(reqPromise as Promise<{ url?: string, type: LX.Quality }>, Math.min(remain, URL_REQUEST_TIMEOUT)))
       return { musicInfo, url, quality: type, isFromCache: false }
     } catch (err: any) {
       if (err.message == requestMsg.tooManyRequests) throw err

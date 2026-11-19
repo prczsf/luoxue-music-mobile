@@ -120,19 +120,25 @@ export const getCurrentTrack = async() => {
 }
 
 export const updateMetaData = async(musicInfo: LX.Player.MusicInfo, isPlay: boolean, force = false) => {
-  if (!force && isPlay == state.isPlaying) {
-    const duration = await TrackPlayer.getDuration()
+  if (!musicInfo?.id) return
+  if (force) {
+    state.prevDuration = await TrackPlayer.getDuration().catch(() => 0)
+    delayUpdateMusicInfo(musicInfo)
+    return
+  }
+  if (isPlay == state.isPlaying) {
+    const duration = await TrackPlayer.getDuration().catch(() => 0)
     if (state.prevDuration != duration) {
       state.prevDuration = duration
       const trackInfo = await getCurrentTrack()
-      if (trackInfo && musicInfo) {
+      if (trackInfo) {
         delayUpdateMusicInfo(musicInfo)
       }
     }
   } else {
-    const [duration, trackInfo] = await Promise.all([TrackPlayer.getDuration(), getCurrentTrack()])
+    const [duration, trackInfo] = await Promise.all([TrackPlayer.getDuration().catch(() => 0), getCurrentTrack()])
     state.prevDuration = duration
-    if (trackInfo && musicInfo) {
+    if (trackInfo) {
       delayUpdateMusicInfo(musicInfo)
     }
   }

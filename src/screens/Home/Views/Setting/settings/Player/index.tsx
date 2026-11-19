@@ -8,6 +8,7 @@ import IsEnableAudioOffload from './IsEnableAudioOffload'
 import IsAutoCleanPlayedList from './IsAutoCleanPlayedList'
 import IsShowBluetoothLyric from './IsShowBluetoothLyric'
 import IsShowBluetoothFullLyric from './IsShowBluetoothFullLyric'
+import IsPauseOnRemoteStop from './IsPauseOnRemoteStop'
 import IsShowNotificationImage from './IsShowNotificationImage'
 import IsShowLyricTranslation from './IsShowLyricTranslation'
 import IsShowLyricRoma from './IsShowLyricRoma'
@@ -27,6 +28,7 @@ export default memo(() => {
       <IsEnableAudioOffload />
       <IsShowBluetoothLyric />
       <IsShowBluetoothFullLyric />
+      <IsPauseOnRemoteStop />
       <IsShowNotificationImage />
       <IsShowLyricTranslation />
       <IsShowLyricRoma />

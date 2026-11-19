@@ -16,10 +16,10 @@ export default () => {
     lrc: false,
     lockLrc: false,
   }
-  const setButtons = () => {
+  const setButtons = (force = false) => {
     // setPlayerAction(buttons)
     if (!playerState.playMusicInfo.musicInfo) return
-    void updateMetaData(playerState.musicInfo, playerState.isPlay)
+    void updateMetaData(playerState.musicInfo, playerState.isPlay, force)
   }
   // const updateCollectStatus = async() => {
   //   // let status = !!playMusicInfo.musicInfo && await checkListExistMusic(LIST_ID_LOVE, playerState.playMusicInfo.musicInfo.id)
@@ -30,15 +30,17 @@ export default () => {
 
   const handlePlay = () => {
     // if (buttons.empty) buttons.empty = false
-    if (buttons.play) return
     buttons.play = true
-    setButtons()
+    setButtons(true)
   }
   const handlePause = () => {
     // if (buttons.empty) buttons.empty = false
-    if (!buttons.play) return
     buttons.play = false
-    setButtons()
+    setButtons(true)
+  }
+  const handleMusicToggled = () => {
+    buttons.play = playerState.isPlay
+    setButtons(true)
   }
   // const handleStop = () => {
   //   // if (playerState.playMusicInfo.musicInfo != null) return
@@ -67,6 +69,8 @@ export default () => {
   global.app_event.on('play', handlePlay)
   global.app_event.on('pause', handlePause)
   global.app_event.on('stop', handlePause)
+  global.app_event.on('error', handlePause)
+  global.app_event.on('musicToggled', handleMusicToggled)
   // global.app_event.on('musicToggled', handleSetPlayInfo)
   // window.app_event.on(eventTaskbarNames.setTaskbarThumbnailClip, handleSetTaskbarThumbnailClip)
   // window.app_event.on('myListMusicUpdate', throttleListChange)

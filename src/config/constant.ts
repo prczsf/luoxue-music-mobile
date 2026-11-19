@@ -85,6 +85,8 @@ export const storageDataPrefix = {
   roamingIndexCache: '@roaming_index_cache',
 
   userApi: '@user_api__',
+
+  playFailureStats: '@play_failure_stats',
 } as const
 
 // v0.x.x 版本的 data keys

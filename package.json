@@ -1,7 +1,7 @@
 {
   "name": "lx-music-mobile",
-  "version": "1.10.2",
-  "versionCode": 81,
+  "version": "1.10.3",
+  "versionCode": 83,
   "private": true,
   "scripts": {
     "dev": "react-native run-android --active-arch-only",
@@ -10,7 +10,7 @@
     "sc": "react-native start --reset-cache",
     "lint": "eslint . --ext .js,.jsx,.ts,.tsx",
     "lint:fix": "eslint . --ext .js,.jsx,.ts,.tsx --fix",
-    "test": "node test/storage.test.js && node test/filterMusicList.test.js",
+    "test": "node test/storage.test.js && node test/filterMusicList.test.js && node test/playFailureStats.test.js && node test/delayNext.test.js",
     "rd": "react-devtools",
     "menu": "adb shell input keyevent 82",
     "bundle-android": "react-native bundle --platform android --dev true --entry-file index.js --bundle-output android/app/src/main/assets/index.android.bundle --assets-dest android/app/src/main/res",
@@ -21,6 +21,7 @@
     "clear": "cd android && gradlew.bat clean",
     "clear:full": "git clean -fdx -e android/keystore.properties -e android/app/*.keystore",
     "build:theme": "node src/theme/themes/createThemes.js",
+    "postinstall": "node dependencies-patch.js",
     "publish": "node publish"
   },
   "engines": {

@@ -27,3 +27,8 @@ export const isMusicInvalid = (musicInfo: Music | null) => {
   if (!musicInfo) return false
   return invalidMusicIds.has(getMusicId(musicInfo))
 }
+
+/** 清空会话级不可播放标记（用于用户主动要求重新尝试整张列表） */
+export const clearInvalidMusic = () => {
+  invalidMusicIds.clear()
+}

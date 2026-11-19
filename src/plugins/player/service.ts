@@ -6,7 +6,9 @@ import { isTempId, isEmpty } from './utils'
 // import { play as lrcPlay, pause as lrcPause } from '@/core/lyric'
 import { exitApp } from '@/core/common'
 import { getCurrentTrackId } from './playList'
-import { pause, play, playNext, playPrev } from '@/core/player/player'
+import { cancelPendingAutoToggle, pause, play, playNext, playPrev } from '@/core/player/player'
+import playerState from '@/store/player/state'
+import settingState from '@/store/setting/state'
 
 let isInitialized = false
 
@@ -24,32 +26,61 @@ const handleExitApp = async(reason: string) => {
 }
 
 
+const logMediaEvent = (action: string, extra?: Record<string, unknown>) => {
+  console.log('[media]', action, {
+    id: playerState.playMusicInfo.musicInfo?.id ?? null,
+    name: playerState.musicInfo.name,
+    listId: playerState.playInfo.playerListId,
+    isPlay: playerState.isPlay,
+    trackId: global.lx.playerTrackId,
+    ...extra,
+  })
+}
+
 const registerPlaybackService = async() => {
   if (isInitialized) return
 
   console.log('reg services...')
   TrackPlayer.addEventListener(TPEvent.RemotePlay, () => {
-    // console.log('remote-play')
+    logMediaEvent('remote-play')
     play()
   })
 
   TrackPlayer.addEventListener(TPEvent.RemotePause, () => {
-    // console.log('remote-pause')
+    logMediaEvent('remote-pause')
     void pause()
   })
 
-  TrackPlayer.addEventListener(TPEvent.RemoteNext, () => {
-    // console.log('remote-next')
-    void playNext()
+  TrackPlayer.addEventListener(TPEvent.RemoteNext, async() => {
+    logMediaEvent('remote-next')
+    cancelPendingAutoToggle()
+    try {
+      await playNext()
+    } catch (err) {
+      logMediaEvent('remote-next-error', { error: err instanceof Error ? err.message : String(err) })
+    }
   })
 
-  TrackPlayer.addEventListener(TPEvent.RemotePrevious, () => {
-    // console.log('remote-previous')
-    void playPrev()
+  TrackPlayer.addEventListener(TPEvent.RemotePrevious, async() => {
+    logMediaEvent('remote-previous')
+    cancelPendingAutoToggle()
+    try {
+      await playPrev()
+    } catch (err) {
+      logMediaEvent('remote-previous-error', { error: err instanceof Error ? err.message : String(err) })
+    }
   })
 
   TrackPlayer.addEventListener(TPEvent.RemoteStop, () => {
-    // console.log('remote-stop')
+    logMediaEvent('remote-stop')
+    if (global.lx.isPlayedStop) {
+      void handleExitApp('Timeout Exit')
+      return
+    }
+    if (settingState.setting['player.isPauseOnRemoteStop']) {
+      void pause()
+      return
+    }
     void handleExitApp('Remote Stop')
   })
 
@@ -141,38 +172,38 @@ const registerPlaybackService = async() => {
       //   store.dispatch(playerAction.playNext(true))
       // }
     }
-  //   // if (!info.nextTrack) return
-  //   // if (info.track) {
-  //   //   const track = info.track.substring(0, info.track.lastIndexOf('__//'))
-  //   //   const nextTrack = info.track.substring(0, info.nextTrack.lastIndexOf('__//'))
-  //   //   console.log(nextTrack, track)
-  //   //   if (nextTrack == track) return
-  //   // }
-  //   // const track = await TrackPlayer.getTrack(info.nextTrack)
-  //   // if (!track) return
-  //   // let newTrack
-  //   // if (track.url == defaultUrl) {
-  //   //   TrackPlayer.pause().then(async() => {
-  //   //     isRefreshUrl = true
-  //   //     retryGetUrlId = track.id
-  //   //     retryGetUrlNum = 0
-  //   //     try {
-  //   //       newTrack = await updateTrackUrl(track)
-  //   //       console.log('++++newTrack++++', newTrack)
-  //   //     } catch (error) {
-  //   //       console.log('error', error)
-  //   //       if (error.message != '跳过播放') TrackPlayer.skipToNext()
-  //   //       isRefreshUrl = false
-  //   //       retryGetUrlId = null
-  //   //       return
-  //   //     }
-  //   //     retryGetUrlId = null
-  //   //     isRefreshUrl = false
-  //   //     console.log(await TrackPlayer.getQueue(), null, 2)
-  //   //     await TrackPlayer.play()
-  //   //   })
-  //   // }
-  //   // store.dispatch(playerAction.playNext())
+    //   // if (!info.nextTrack) return
+    //   // if (info.track) {
+    //   //   const track = info.track.substring(0, info.track.lastIndexOf('__//'))
+    //   //   const nextTrack = info.track.substring(0, info.nextTrack.lastIndexOf('__//'))
+    //   //   console.log(nextTrack, track)
+    //   //   if (nextTrack == track) return
+    //   // }
+    //   // const track = await TrackPlayer.getTrack(info.nextTrack)
+    //   // if (!track) return
+    //   // let newTrack
+    //   // if (track.url == defaultUrl) {
+    //   //   TrackPlayer.pause().then(async() => {
+    //   //     isRefreshUrl = true
+    //   //     retryGetUrlId = track.id
+    //   //     retryGetUrlNum = 0
+    //   //     try {
+    //   //       newTrack = await updateTrackUrl(track)
+    //   //       console.log('++++newTrack++++', newTrack)
+    //   //     } catch (error) {
+    //   //       console.log('error', error)
+    //   //       if (error.message != '跳过播放') TrackPlayer.skipToNext()
+    //   //       isRefreshUrl = false
+    //   //       retryGetUrlId = null
+    //   //       return
+    //   //     }
+    //   //     retryGetUrlId = null
+    //   //     isRefreshUrl = false
+    //   //     console.log(await TrackPlayer.getQueue(), null, 2)
+    //   //     await TrackPlayer.play()
+    //   //   })
+    //   // }
+    //   // store.dispatch(playerAction.playNext())
   })
   // TrackPlayer.addEventListener('playback-queue-ended', async info => {
   //   // console.log('playback-queue-ended', info)

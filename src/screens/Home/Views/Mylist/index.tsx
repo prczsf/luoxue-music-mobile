@@ -13,6 +13,7 @@ import ListMenu, { type ListMenuType, type Position } from './MyList/ListMenu'
 import ListNameEdit, { type ListNameEditType } from './MyList/ListNameEdit'
 import ListMusicSort, { type ListMusicSortType } from './MyList/ListMusicSort'
 import DuplicateMusic, { type DuplicateMusicType } from './MyList/DuplicateMusic'
+import FailureMusicModal, { type FailureMusicModalType } from './MyList/FailureMusicModal'
 import ListImportExport, { type ListImportExportType } from './MyList/ListImportExport'
 import { handleRemove, handleSync } from './MyList/listAction'
 
@@ -26,6 +27,7 @@ export default () => {
   const listNameEditRef = useRef<ListNameEditType>(null)
   const listMusicSortRef = useRef<ListMusicSortType>(null)
   const duplicateMusicRef = useRef<DuplicateMusicType>(null)
+  const failureMusicModalRef = useRef<FailureMusicModalType>(null)
   const listImportExportRef = useRef<ListImportExportType>(null)
 
   const handleOpenDetail = useCallback((listInfo: LX.List.MyListInfo) => {
@@ -72,12 +74,14 @@ export default () => {
       <ListNameEdit ref={listNameEditRef} />
       <ListMusicSort ref={listMusicSortRef} />
       <DuplicateMusic ref={duplicateMusicRef} />
+      <FailureMusicModal ref={failureMusicModalRef} />
       <ListImportExport ref={listImportExportRef} />
       <ListMenu
         ref={listMenuRef}
         onRename={info => listNameEditRef.current?.show(info)}
         onSort={info => listMusicSortRef.current?.show(info)}
         onDuplicateMusic={info => duplicateMusicRef.current?.show(info)}
+        onCleanFailureMusic={info => failureMusicModalRef.current?.show(info)}
         onImport={(info, position) => listImportExportRef.current?.import(info, position)}
         onExport={(info, position) => listImportExportRef.current?.export(info, position)}
         onRemove={info => { handleRemove(info) }}
