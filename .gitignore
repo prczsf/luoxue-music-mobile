@@ -67,3 +67,5 @@ buck-out/
 # testing
 /coverage
 .codegraph
+.workbuddy-ai
+.vscode
